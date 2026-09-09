@@ -48,7 +48,8 @@ type FolderPathDisplayProps = {
 
 export const FolderPathDisplay = ({ path }: FolderPathDisplayProps) => {
   const { t } = useLingui();
-  const { copyToClipboard } = useCopyToClipboard();
+  const { copyToClipboard, copyToClipboardWithoutSuccessSnackBar } =
+    useCopyToClipboard();
   const { enqueueInfoSnackBar } = useSnackBar();
 
   const openFolder = (event: MouseEvent<HTMLElement>) => {
@@ -59,13 +60,14 @@ export const FolderPathDisplay = ({ path }: FolderPathDisplayProps) => {
     const openedWindow = window.open(fileUrl, '_blank');
 
     // Browsers block file:// navigation from an http(s) origin. When the open
-    // is refused, fall back to copying the path so the user can paste it into
-    // their file explorer.
+    // is refused, copy the path (silently) and show a longer, explanatory
+    // message so the user can paste it into their file explorer.
     if (!isDefined(openedWindow)) {
-      copyToClipboard(
-        path,
-        t`Your browser blocked opening the folder. The path was copied — paste it into your file explorer.`,
-      );
+      copyToClipboardWithoutSuccessSnackBar(path);
+      enqueueInfoSnackBar({
+        message: t`Your browser blocked opening the folder. The path was copied — paste it into your file explorer.`,
+        options: { duration: 6000 },
+      });
 
       return;
     }
