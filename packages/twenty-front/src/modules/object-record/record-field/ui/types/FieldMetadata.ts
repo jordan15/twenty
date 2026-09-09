@@ -32,6 +32,7 @@ export type FieldTextMetadata = BaseFieldMetadata & {
   placeHolder: string;
   settings?: {
     displayedMaxRows?: number;
+    displayAsFolderPath?: boolean;
   };
 };
 
