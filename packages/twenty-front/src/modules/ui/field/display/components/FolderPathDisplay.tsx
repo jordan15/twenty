@@ -1,11 +1,10 @@
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { type MouseEvent } from 'react';
-import { isDefined } from 'twenty-shared/utils';
 import { IconCopy, IconFolder, IconFolderOpen } from 'twenty-ui/icon';
 import { LightIconButton } from 'twenty-ui/input';
 
-import { convertFolderPathToFileUrl } from '@/object-record/record-field/ui/meta-types/display/utils/convertFolderPathToFileUrl';
+import { buildOpenFolderProtocolUrl } from '@/object-record/record-field/ui/meta-types/display/utils/buildOpenFolderProtocolUrl';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
@@ -48,33 +47,30 @@ type FolderPathDisplayProps = {
 
 export const FolderPathDisplay = ({ path }: FolderPathDisplayProps) => {
   const { t } = useLingui();
-  const { copyToClipboard, copyToClipboardWithoutSuccessSnackBar } =
-    useCopyToClipboard();
+  const { copyToClipboard } = useCopyToClipboard();
   const { enqueueInfoSnackBar } = useSnackBar();
 
   const openFolder = (event: MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     event.preventDefault();
 
-    const fileUrl = convertFolderPathToFileUrl(path);
-    const openedWindow = window.open(fileUrl, '_blank');
+    const protocolUrl = buildOpenFolderProtocolUrl(path);
 
-    // Browsers block file:// navigation from an http(s) origin. When the open
-    // is refused, copy the path (silently) and show a longer, explanatory
-    // message so the user can paste it into their file explorer.
-    if (!isDefined(openedWindow)) {
-      copyToClipboardWithoutSuccessSnackBar(path);
-      enqueueInfoSnackBar({
-        message: t`Your browser blocked opening the folder. The path was copied — paste it into your file explorer.`,
-        options: { duration: 6000 },
-      });
-
-      return;
-    }
+    // file:// is blocked from an https origin, so we trigger a custom protocol
+    // (see packages/twenty-docker/windows-open-folder) through a transient
+    // hidden iframe. Using an iframe keeps the SPA from navigating away when
+    // the OS helper is not installed on this machine.
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = protocolUrl;
+    document.body.appendChild(iframe);
+    setTimeout(() => {
+      iframe.remove();
+    }, 1000);
 
     enqueueInfoSnackBar({
-      message: t`Opening folder… If nothing happens, use Copy — your browser may block local folders.`,
-      options: { duration: 4000 },
+      message: t`Opening folder… If nothing happens, the folder helper isn't installed on this computer — use Copy and paste the path into your file explorer.`,
+      options: { duration: 6000 },
     });
   };
 
