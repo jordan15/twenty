@@ -25558,15 +25558,10 @@ msgstr "Ouvrir le dossier : {path}"
 msgid "Folder path copied to clipboard"
 msgstr "Chemin de dossier copié dans le presse-papiers"
 
-#. js-lingui-id: jHizls
+#. js-lingui-id: gZPEFo
 #: src/modules/ui/field/display/components/FolderPathDisplay.tsx
-msgid "Your browser blocked opening the folder. The path was copied — paste it into your file explorer."
-msgstr "Votre navigateur a bloqué l'ouverture du dossier. Le chemin a été copié — collez-le dans votre explorateur de fichiers."
-
-#. js-lingui-id: cj0Tw4
-#: src/modules/ui/field/display/components/FolderPathDisplay.tsx
-msgid "Opening folder… If nothing happens, use Copy — your browser may block local folders."
-msgstr "Ouverture du dossier… Si rien ne se passe, utilisez Copier — votre navigateur peut bloquer les dossiers locaux."
+msgid "Opening folder… If nothing happens, the folder helper isn't installed on this computer — use Copy and paste the path into your file explorer."
+msgstr "Ouverture du dossier… Si rien ne se passe, l'utilitaire d'ouverture n'est pas installé sur cet ordinateur — utilisez Copier et collez le chemin dans votre explorateur de fichiers."
 
 #. js-lingui-id: jNGrva
 #: src/modules/object-record/record-field/ui/meta-types/input/components/TextFieldInput.tsx
