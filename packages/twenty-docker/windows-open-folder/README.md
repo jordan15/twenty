@@ -3,71 +3,82 @@
 The Text field option **Folder path** shows an **Open** button. Browsers cannot
 open a local folder from an `https` page via `file://` (security sandbox), so
 the button triggers a custom protocol, **`openfoldercrm://`**, that a small
-Windows registry handler maps to Windows Explorer.
+Windows handler maps to Windows Explorer.
 
 - **Where the handler is installed:** on each **Windows client** that needs the
   Open button to work (not on the server).
 - **Without the handler:** the Open button does nothing; users can still use the
   **Copy** button and paste the path into Explorer.
 
+## Files
+
+Two files, deployed **together** on the client:
+
+- `open-folder.vbs` → deployed to `C:\ProgramData\TwentyCRM\open-folder.vbs`
+- `openfoldercrm.reg` → registers the protocol to call that script
+
+The registry runs the script via `wscript.exe`, which **shows no window**. The
+script then launches PowerShell hidden to decode the path (UTF-8 aware, so
+accented folder names work) and open it with `Invoke-Item` (Windows Explorer).
+
+> Note: an earlier version pointed the registry directly at `powershell.exe`,
+> which briefly flashed a PowerShell console window. The `.vbs` wrapper removes
+> that window entirely.
+
 ## How it works
 
 1. In the browser, the Open button navigates a hidden iframe to
    `openfoldercrm://<url-encoded-absolute-path>`.
-2. Windows looks up the `openfoldercrm` protocol in the registry and runs the
-   handler with the full URL as `%1`.
-3. The handler (an inline PowerShell one-liner) strips the `openfoldercrm://`
-   prefix, URL-decodes the path, checks it exists, and opens it with
-   `Invoke-Item` (i.e. Windows Explorer).
+2. Windows looks up the `openfoldercrm` protocol and runs
+   `wscript.exe "C:\ProgramData\TwentyCRM\open-folder.vbs" "<url>"`.
+3. The script strips the `openfoldercrm://` prefix, URL-decodes the path, checks
+   it exists, and opens it in Explorer — no visible window at any step.
 
 The path is only ever passed to `Invoke-Item -LiteralPath` as data (never to a
 shell), and the handler refuses paths that do not exist, which limits abuse.
 
 ## Quick manual test (single machine)
 
-1. Copy `openfoldercrm.reg` to the Windows machine.
-2. For a no-admin per-user test, edit it and replace every
+1. Create `C:\ProgramData\TwentyCRM\` and copy `open-folder.vbs` into it.
+2. For a no-admin per-user test, edit `openfoldercrm.reg` and replace every
    `HKEY_LOCAL_MACHINE\SOFTWARE\Classes` with
    `HKEY_CURRENT_USER\SOFTWARE\Classes`.
 3. Double-click the `.reg` (or `reg import openfoldercrm.reg`) and accept.
 4. In Twenty, click **Open** on a folder-path field. Explorer should open at the
-   path. You can also test the scheme directly from the Run dialog (Win+R):
-   `openfoldercrm://C%3A%5CWindows`.
+   path, with no PowerShell window. You can also test from the Run dialog
+   (Win+R): `openfoldercrm://C%3A%5CWindows`.
 
 ## Fleet deployment via GPO (recommended)
 
-`openfoldercrm.reg` writes to `HKLM`, so it applies to every user on the
-machine. Two common options:
+Deploy **both** the file and the registry keys to the target **computers**.
 
-### Option 1 — Group Policy Preferences (no scripts)
+### 1. Deploy `open-folder.vbs`
 
-1. Put `openfoldercrm.reg` on a share readable by the target computers
-   (e.g. `\\server\netlogon\openfoldercrm.reg`).
-2. Open **Group Policy Management**, edit a GPO linked to the OU that contains
-   the target **computers**.
-3. Go to **Computer Configuration → Preferences → Windows Settings → Registry**.
-4. Right-click → **New → Registry Wizard**, browse a reference machine where the
-   `.reg` was already imported, and select the `openfoldercrm` keys — or add the
-   keys/values manually to mirror the `.reg`. Set the action to **Update**.
-5. Apply the GPO; clients pick it up on the next Group Policy refresh
-   (`gpupdate /force` to test immediately).
+**Computer Configuration → Preferences → Windows Settings → Files**
+- Source: `\\server\netlogon\open-folder.vbs`
+- Destination: `C:\ProgramData\TwentyCRM\open-folder.vbs`
+- Action: Update (creates the folder if missing)
 
-### Option 2 — Startup script that imports the .reg
+### 2. Register the protocol (`HKLM`)
 
-1. Place `openfoldercrm.reg` on a share readable by the computer accounts.
-2. In the GPO: **Computer Configuration → Policies → Windows Settings →
-   Scripts (Startup/Shutdown) → Startup → Add**.
-3. Use `reg.exe` with:
-   - Script name: `reg.exe`
-   - Parameters: `import \\server\netlogon\openfoldercrm.reg`
+Option A — **Group Policy Preferences (no scripts)**
+- **Computer Configuration → Preferences → Windows Settings → Registry**
+- Add the `openfoldercrm` keys/values to mirror `openfoldercrm.reg` (Registry
+  Wizard can import them from a reference machine). Action: Update.
 
-   (Startup scripts run as SYSTEM, which can write `HKLM`.)
-4. Reboot a test machine (or `gpupdate /force` then re-run the script) to apply.
+Option B — **Startup script that imports the .reg**
+- **Computer Configuration → Policies → Windows Settings → Scripts
+  (Startup/Shutdown) → Startup → Add**
+- Script: `reg.exe`  Parameters: `import \\server\netlogon\openfoldercrm.reg`
+- (Startup scripts run as SYSTEM, which can write `HKLM`.)
+
+Apply with `gpupdate /force` on a test machine, then reboot / re-log to be sure
+the Files preference has run. Both files must be present for the button to work.
 
 ## Changing the protocol name
 
-If you rename the scheme, keep three places in sync:
+If you rename the scheme, keep these in sync:
 - `OPEN_FOLDER_PROTOCOL` in
   `packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/display/utils/buildOpenFolderProtocolUrl.ts`,
-- the registry key name, and
-- the `-replace '^<scheme>://',''` prefix in the handler command.
+- the registry key name,
+- the `-replace '^<scheme>://',''` prefix in `open-folder.vbs`.

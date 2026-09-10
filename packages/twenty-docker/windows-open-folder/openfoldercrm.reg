@@ -1,8 +1,12 @@
 Windows Registry Editor Version 5.00
 
 ; Machine-wide handler for the "openfoldercrm://" custom protocol used by the
-; Twenty "folder path" field. It receives an URL-encoded absolute path from the
-; browser, decodes it, and opens it in Windows Explorer when the folder exists.
+; Twenty "folder path" field. It hands the URL to open-folder.vbs, which decodes
+; the absolute path and opens it in Windows Explorer WITHOUT showing any window.
+;
+; REQUIRES open-folder.vbs to be deployed at:
+;   C:\ProgramData\TwentyCRM\open-folder.vbs
+; (deploy both files together; see README.md)
 ;
 ; Machine-wide install (HKLM) is intended for GPO deployment. For a per-user
 ; test install, replace HKEY_LOCAL_MACHINE\SOFTWARE\Classes with
@@ -20,4 +24,4 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Classes\openfoldercrm\shell\open]
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Classes\openfoldercrm\shell\open\command]
-@="powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"$u=$args[0]; $p=[uri]::UnescapeDataString(($u -replace '^openfoldercrm://','' -replace '/$','')); if (Test-Path -LiteralPath $p) { Invoke-Item -LiteralPath $p }\" \"%1\""
+@="wscript.exe \"C:\\ProgramData\\TwentyCRM\\open-folder.vbs\" \"%1\""
