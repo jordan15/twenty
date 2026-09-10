@@ -1,0 +1,23 @@
+Windows Registry Editor Version 5.00
+
+; Machine-wide handler for the "openfoldercrm://" custom protocol used by the
+; Twenty "folder path" field. It receives an URL-encoded absolute path from the
+; browser, decodes it, and opens it in Windows Explorer when the folder exists.
+;
+; Machine-wide install (HKLM) is intended for GPO deployment. For a per-user
+; test install, replace HKEY_LOCAL_MACHINE\SOFTWARE\Classes with
+; HKEY_CURRENT_USER\SOFTWARE\Classes (no admin rights required).
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\openfoldercrm]
+@="URL:Open Folder CRM Protocol"
+"URL Protocol"=""
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\openfoldercrm\DefaultIcon]
+@="explorer.exe,0"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\openfoldercrm\shell]
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\openfoldercrm\shell\open]
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\openfoldercrm\shell\open\command]
+@="powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"$u=$args[0]; $p=[uri]::UnescapeDataString(($u -replace '^openfoldercrm://','' -replace '/$','')); if (Test-Path -LiteralPath $p) { Invoke-Item -LiteralPath $p }\" \"%1\""
