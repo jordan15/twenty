@@ -7,6 +7,10 @@
 ' starts PowerShell with a hidden window (Run "...", 0, False). This avoids the
 ' PowerShell window that appears when the registry command runs powershell.exe
 ' directly.
+'
+' The URL is embedded directly in the PowerShell script (not passed as $args),
+' because $args is not reliably populated when PowerShell is started through
+' WScript.Shell.Run.
 Option Explicit
 
 If WScript.Arguments.Count = 0 Then WScript.Quit
@@ -14,17 +18,17 @@ If WScript.Arguments.Count = 0 Then WScript.Quit
 Dim url
 url = WScript.Arguments(0)
 
-' The URL is produced with encodeURIComponent on the front-end, so it only
-' contains unreserved characters and %XX escapes: no quotes or spaces, which
-' makes it safe to embed between double quotes below.
+' encodeURIComponent leaves single quotes unescaped, so double them to keep the
+' PowerShell single-quoted string safe.
+url = Replace(url, "'", "''")
+
 Dim psScript
-psScript = "$u=$args[0]; " & _
-  "$p=[uri]::UnescapeDataString(($u -replace '^openfoldercrm://','' -replace '/$','')); " & _
+psScript = "$u='" & url & "'; " & _
+  "$p=[uri]::UnescapeDataString(($u -replace '^openfoldercrm:(//)?','' -replace '/$','')); " & _
   "if (Test-Path -LiteralPath $p) { Invoke-Item -LiteralPath $p }"
 
 Dim cmd
-cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & _
-  Chr(34) & psScript & Chr(34) & " " & Chr(34) & url & Chr(34)
+cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & psScript & Chr(34)
 
 ' 0 = hidden window, False = do not wait for PowerShell to exit.
 CreateObject("WScript.Shell").Run cmd, 0, False
