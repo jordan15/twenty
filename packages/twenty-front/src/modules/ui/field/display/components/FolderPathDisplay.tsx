@@ -1,11 +1,10 @@
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { type MouseEvent } from 'react';
+import { LightIconButton, useToast } from 'twenty-ui/components';
 import { IconCopy, IconFolder, IconFolderOpen } from 'twenty-ui/icon';
-import { LightIconButton } from 'twenty-ui/input';
 
 import { buildOpenFolderProtocolUrl } from '@/object-record/record-field/ui/meta-types/display/utils/buildOpenFolderProtocolUrl';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 const StyledContainer = styled.div`
@@ -48,7 +47,7 @@ type FolderPathDisplayProps = {
 export const FolderPathDisplay = ({ path }: FolderPathDisplayProps) => {
   const { t } = useLingui();
   const { copyToClipboard } = useCopyToClipboard();
-  const { enqueueInfoSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const openFolder = (event: MouseEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -68,9 +67,10 @@ export const FolderPathDisplay = ({ path }: FolderPathDisplayProps) => {
       iframe.remove();
     }, 1000);
 
-    enqueueInfoSnackBar({
-      message: t`Opening folder… If nothing happens, the folder helper isn't installed on this computer — use Copy and paste the path into your file explorer.`,
-      options: { duration: 6000 },
+    enqueueToast({
+      variant: 'info',
+      duration: 6000,
+      children: t`Opening folder… If nothing happens, the folder helper isn't installed on this computer — use Copy and paste the path into your file explorer.`,
     });
   };
 
@@ -87,17 +87,21 @@ export const FolderPathDisplay = ({ path }: FolderPathDisplayProps) => {
         <StyledPathLabel>{path}</StyledPathLabel>
       </StyledPathChip>
       <LightIconButton
-        Icon={IconFolderOpen}
+        aria-label={t`Open folder`}
+        tooltip={t`Open folder`}
+        emphasis="subtle"
         onClick={openFolder}
-        title={t`Open folder`}
-        accent="tertiary"
-      />
+      >
+        <IconFolderOpen />
+      </LightIconButton>
       <LightIconButton
-        Icon={IconCopy}
+        aria-label={t`Copy path`}
+        tooltip={t`Copy path`}
+        emphasis="subtle"
         onClick={copyPath}
-        title={t`Copy path`}
-        accent="tertiary"
-      />
+      >
+        <IconCopy />
+      </LightIconButton>
     </StyledContainer>
   );
 };

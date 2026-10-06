@@ -6,18 +6,18 @@ import { FieldInputEventContext } from '@/object-record/record-field/ui/contexts
 import { RecordFieldComponentInstanceContext } from '@/object-record/record-field/ui/states/contexts/RecordFieldComponentInstanceContext';
 
 import { FieldInputContainer } from '@/ui/field/input/components/FieldInputContainer';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useLingui } from '@lingui/react/macro';
 import { type DragEvent, useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components';
 import { turnIntoUndefinedIfWhitespacesOnly } from '~/utils/string/turnIntoUndefinedIfWhitespacesOnly';
 
 export const TextFieldInput = () => {
   const { fieldDefinition, draftValue, setDraftValue } = useTextField();
 
   const { t } = useLingui();
-  const { enqueueInfoSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const isFolderPath =
     fieldDefinition.metadata.settings?.displayAsFolderPath === true;
@@ -93,9 +93,10 @@ export const TextFieldInput = () => {
     if (isDefined(folderName) && folderName.length > 0) {
       event.preventDefault();
       setDraftValue(folderName);
-      enqueueInfoSnackBar({
-        message: t`Only the folder name could be read — browsers don't expose the absolute path. Complete the full path.`,
-        options: { duration: 6000 },
+      enqueueToast({
+        variant: 'info',
+        duration: 6000,
+        children: t`Only the folder name could be read — browsers don't expose the absolute path. Complete the full path.`,
       });
     }
   };

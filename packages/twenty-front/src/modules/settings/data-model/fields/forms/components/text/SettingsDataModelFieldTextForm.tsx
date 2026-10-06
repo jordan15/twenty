@@ -2,7 +2,7 @@ import { Controller, useFormContext } from 'react-hook-form';
 
 import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetadataItemById';
 import { SettingsOptionCardContentSelect } from '@/settings/components/SettingsOptions/SettingsOptionCardContentSelect';
-import { SettingsOptionCardContentToggle } from '@/settings/components/SettingsOptions/SettingsOptionCardContentToggle';
+import { SettingsOptionCardContentSwitch } from '@/settings/components/SettingsOptions/SettingsOptionCardContentSwitch';
 import { TEXT_DATA_MODEL_SELECT_OPTIONS } from '@/settings/data-model/fields/forms/components/text/constants/TextDataModelSelectOptions';
 import { Select } from '@/ui/input/components/Select';
 import { useLingui } from '@lingui/react/macro';
@@ -72,7 +72,7 @@ export const SettingsDataModelFieldTextForm = ({
                 selectSizeVariant="small"
               />
             </SettingsOptionCardContentSelect>
-            <SettingsOptionCardContentToggle
+            <SettingsOptionCardContentSwitch
               Icon={IconFolder}
               title={t`Folder path`}
               description={t`Treat the value as a system folder path with copy and open actions`}
