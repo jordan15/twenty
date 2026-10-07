@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { isNonEmptyString, isString } from '@sniptt/guards';
 import chunk from 'lodash.chunk';
 import { QUERY_MAX_RECORDS } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
@@ -19,6 +20,11 @@ import {
   type ExistingTarget,
   type TargetIdentity,
 } from 'src/modules/match-participant/utils/compute-target-reconciliation-operations.util';
+import { findOpportunityOfferNumberFieldName } from 'src/modules/match-participant/utils/find-opportunity-offer-number-field-name.util';
+import {
+  selectOpportunityIdsForMessageThread,
+  type OpportunitySubjectMatchCandidate,
+} from 'src/modules/match-participant/utils/select-opportunity-ids-for-message-thread.util';
 import { type OpportunityWorkspaceEntity } from 'src/modules/opportunity/standard-objects/opportunity.workspace-entity';
 import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
 
@@ -213,14 +219,26 @@ export class ParticipantTargetReconciliationService {
     )) {
       const threadMessages = await messageRepository.find({
         where: { messageThreadId: In(messageThreadIdChunk) },
-        select: { id: true, messageThreadId: true },
+        select: { id: true, messageThreadId: true, subject: true },
       });
       const messageThreadIdByMessageId = new Map<string, string>();
+      const subjectsByMessageThreadId = new Map<string, string[]>();
 
-      for (const { id, messageThreadId } of threadMessages) {
-        if (isDefined(messageThreadId)) {
-          messageThreadIdByMessageId.set(id, messageThreadId);
+      for (const { id, messageThreadId, subject } of threadMessages) {
+        if (!isDefined(messageThreadId)) {
+          continue;
         }
+
+        messageThreadIdByMessageId.set(id, messageThreadId);
+
+        if (!isNonEmptyString(subject)) {
+          continue;
+        }
+
+        const subjects = subjectsByMessageThreadId.get(messageThreadId) ?? [];
+
+        subjects.push(subject);
+        subjectsByMessageThreadId.set(messageThreadId, subjects);
       }
 
       const participantRepository =
@@ -252,6 +270,7 @@ export class ParticipantTargetReconciliationService {
             messageThreadIdByMessageId.get(participant.messageId),
         }),
         targetObjectName: 'messageThreadTarget',
+        subjectsByParentId: subjectsByMessageThreadId,
         transactionScope,
       });
     }
@@ -262,12 +281,14 @@ export class ParticipantTargetReconciliationService {
     parentFieldName,
     participantPersonIdsByParentId,
     targetObjectName,
+    subjectsByParentId,
     transactionScope,
   }: {
     parentIds: string[];
     parentFieldName: TargetParentFieldName;
     participantPersonIdsByParentId: Map<string, Set<string>>;
     targetObjectName: 'calendarEventTarget' | 'messageThreadTarget';
+    subjectsByParentId?: Map<string, string[]>;
     transactionScope?: WorkspaceTransactionScope;
   }): Promise<void> {
     if (parentIds.length === 0) {
@@ -285,6 +306,7 @@ export class ParticipantTargetReconciliationService {
     const desiredTargets = await this.buildDesiredTargets({
       parentIds,
       participantPersonIdsByParentId,
+      subjectsByParentId,
       transactionScope,
     });
     const targetRepository = await this.getRepository<TargetWorkspaceEntity>(
@@ -367,10 +389,12 @@ export class ParticipantTargetReconciliationService {
   private async buildDesiredTargets({
     parentIds,
     participantPersonIdsByParentId,
+    subjectsByParentId,
     transactionScope,
   }: {
     parentIds: string[];
     participantPersonIdsByParentId: Map<string, Set<string>>;
+    subjectsByParentId?: Map<string, string[]>;
     transactionScope?: WorkspaceTransactionScope;
   }): Promise<TargetIdentity[]> {
     const personIds = [
@@ -397,29 +421,55 @@ export class ParticipantTargetReconciliationService {
       people.map(({ id, companyId }) => [id, companyId]),
     );
 
+    const offerNumberFieldName = isDefined(subjectsByParentId)
+      ? findOpportunityOfferNumberFieldName({
+          fields: Object.values(
+            getWorkspaceContext().flatFieldMetadataMaps.byUniversalIdentifier,
+          ),
+          opportunityObjectId:
+            getWorkspaceContext().objectIdByNameSingular.opportunity,
+        })
+      : undefined;
     const opportunityRepository =
       await this.getRepository<OpportunityWorkspaceEntity>(
         'opportunity',
         transactionScope,
       );
-    const opportunities = await opportunityRepository.find({
-      where: { pointOfContactId: In(personIds) },
-      select: { id: true, pointOfContactId: true },
-    });
-    const opportunityIdsByPersonId = new Map<string, string[]>();
+    const opportunityRows = isDefined(offerNumberFieldName)
+      ? await opportunityRepository.find({
+          where: { pointOfContactId: In(personIds) },
+          select: ['id', 'pointOfContactId', offerNumberFieldName],
+        })
+      : await opportunityRepository.find({
+          where: { pointOfContactId: In(personIds) },
+          select: { id: true, pointOfContactId: true },
+        });
+    const opportunitiesByPersonId = new Map<
+      string,
+      OpportunitySubjectMatchCandidate[]
+    >();
 
-    for (const opportunity of opportunities) {
+    for (const opportunity of opportunityRows) {
       if (!isDefined(opportunity.pointOfContactId)) {
         continue;
       }
 
-      const opportunityIds =
-        opportunityIdsByPersonId.get(opportunity.pointOfContactId) ?? [];
+      // N° Offre is a workspace column, so it is not on the standard opportunity type.
+      const rawOfferNumber = isDefined(offerNumberFieldName)
+        ? (
+            opportunity as OpportunityWorkspaceEntity & Record<string, unknown>
+          )[offerNumberFieldName]
+        : null;
+      const personOpportunities =
+        opportunitiesByPersonId.get(opportunity.pointOfContactId) ?? [];
 
-      opportunityIds.push(opportunity.id);
-      opportunityIdsByPersonId.set(
+      personOpportunities.push({
+        id: opportunity.id,
+        offerNumber: isString(rawOfferNumber) ? rawOfferNumber : null,
+      });
+      opportunitiesByPersonId.set(
         opportunity.pointOfContactId,
-        opportunityIds,
+        personOpportunities,
       );
     }
 
@@ -431,7 +481,11 @@ export class ParticipantTargetReconciliationService {
           }
 
           const companyId = companyIdByPersonId.get(personId);
-          const opportunityIds = opportunityIdsByPersonId.get(personId) ?? [];
+          const opportunityIds = selectOpportunityIdsForMessageThread({
+            opportunities: opportunitiesByPersonId.get(personId) ?? [],
+            subjects: subjectsByParentId?.get(parentId) ?? [],
+            matchOfferNumberInSubject: isDefined(offerNumberFieldName),
+          });
 
           return [
             {
