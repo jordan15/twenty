@@ -45,16 +45,10 @@ const subjectContainsOfferNumber = (
 export const selectOpportunityIdsForMessageThread = ({
   opportunities,
   subjects,
-  matchOfferNumberInSubject,
 }: {
   opportunities: OpportunitySubjectMatchCandidate[];
   subjects: string[];
-  matchOfferNumberInSubject: boolean;
 }): string[] => {
-  if (!matchOfferNumberInSubject || opportunities.length <= 1) {
-    return opportunities.map(({ id }) => id);
-  }
-
   const normalizedSubjects = subjects
     .map(normalizeEmailSubject)
     .filter((subject) => subject.length > 0);

@@ -4,7 +4,7 @@ import { isNonEmptyString, isString } from '@sniptt/guards';
 import chunk from 'lodash.chunk';
 import { QUERY_MAX_RECORDS } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
-import { In, MoreThan, type ObjectLiteral } from 'typeorm';
+import { In, IsNull, MoreThan, Not, type ObjectLiteral } from 'typeorm';
 
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
@@ -403,10 +403,36 @@ export class ParticipantTargetReconciliationService {
       ),
     ];
 
-    if (personIds.length === 0) {
-      return [];
-    }
+    const participantTargets =
+      personIds.length === 0
+        ? []
+        : await this.buildParticipantPersonAndCompanyTargets({
+            parentIds,
+            participantPersonIdsByParentId,
+            personIds,
+            transactionScope,
+          });
+    const opportunityTargets =
+      await this.buildOpportunityTargetsFromEmailSubjects({
+        parentIds,
+        subjectsByParentId,
+        transactionScope,
+      });
 
+    return [...participantTargets, ...opportunityTargets];
+  }
+
+  private async buildParticipantPersonAndCompanyTargets({
+    parentIds,
+    participantPersonIdsByParentId,
+    personIds,
+    transactionScope,
+  }: {
+    parentIds: string[];
+    participantPersonIdsByParentId: Map<string, Set<string>>;
+    personIds: string[];
+    transactionScope?: WorkspaceTransactionScope;
+  }): Promise<TargetIdentity[]> {
     const personRepository = await this.getRepository<PersonWorkspaceEntity>(
       'person',
       transactionScope,
@@ -421,58 +447,6 @@ export class ParticipantTargetReconciliationService {
       people.map(({ id, companyId }) => [id, companyId]),
     );
 
-    const offerNumberFieldName = isDefined(subjectsByParentId)
-      ? findOpportunityOfferNumberFieldName({
-          fields: Object.values(
-            getWorkspaceContext().flatFieldMetadataMaps.byUniversalIdentifier,
-          ),
-          opportunityObjectId:
-            getWorkspaceContext().objectIdByNameSingular.opportunity,
-        })
-      : undefined;
-    const opportunityRepository =
-      await this.getRepository<OpportunityWorkspaceEntity>(
-        'opportunity',
-        transactionScope,
-      );
-    const opportunityRows = isDefined(offerNumberFieldName)
-      ? await opportunityRepository.find({
-          where: { pointOfContactId: In(personIds) },
-          select: ['id', 'pointOfContactId', offerNumberFieldName],
-        })
-      : await opportunityRepository.find({
-          where: { pointOfContactId: In(personIds) },
-          select: { id: true, pointOfContactId: true },
-        });
-    const opportunitiesByPersonId = new Map<
-      string,
-      OpportunitySubjectMatchCandidate[]
-    >();
-
-    for (const opportunity of opportunityRows) {
-      if (!isDefined(opportunity.pointOfContactId)) {
-        continue;
-      }
-
-      // N° Offre is a workspace column, so it is not on the standard opportunity type.
-      const rawOfferNumber = isDefined(offerNumberFieldName)
-        ? (
-            opportunity as OpportunityWorkspaceEntity & Record<string, unknown>
-          )[offerNumberFieldName]
-        : null;
-      const personOpportunities =
-        opportunitiesByPersonId.get(opportunity.pointOfContactId) ?? [];
-
-      personOpportunities.push({
-        id: opportunity.id,
-        offerNumber: isString(rawOfferNumber) ? rawOfferNumber : null,
-      });
-      opportunitiesByPersonId.set(
-        opportunity.pointOfContactId,
-        personOpportunities,
-      );
-    }
-
     return parentIds.flatMap((parentId) =>
       [...(participantPersonIdsByParentId.get(parentId) ?? [])].flatMap(
         (personId): TargetIdentity[] => {
@@ -481,11 +455,6 @@ export class ParticipantTargetReconciliationService {
           }
 
           const companyId = companyIdByPersonId.get(personId);
-          const opportunityIds = selectOpportunityIdsForMessageThread({
-            opportunities: opportunitiesByPersonId.get(personId) ?? [],
-            subjects: subjectsByParentId?.get(parentId) ?? [],
-            matchOfferNumberInSubject: isDefined(offerNumberFieldName),
-          });
 
           return [
             {
@@ -504,16 +473,101 @@ export class ParticipantTargetReconciliationService {
                   },
                 ]
               : []),
-            ...opportunityIds.map((opportunityId) => ({
-              parentId,
-              targetPersonId: null,
-              targetCompanyId: null,
-              targetOpportunityId: opportunityId,
-            })),
           ];
         },
       ),
     );
+  }
+
+  private async buildOpportunityTargetsFromEmailSubjects({
+    parentIds,
+    subjectsByParentId,
+    transactionScope,
+  }: {
+    parentIds: string[];
+    subjectsByParentId?: Map<string, string[]>;
+    transactionScope?: WorkspaceTransactionScope;
+  }): Promise<TargetIdentity[]> {
+    if (!isDefined(subjectsByParentId)) {
+      return [];
+    }
+
+    const offerNumberFieldName = findOpportunityOfferNumberFieldName({
+      fields: Object.values(
+        getWorkspaceContext().flatFieldMetadataMaps.byUniversalIdentifier,
+      ),
+      opportunityObjectId:
+        getWorkspaceContext().objectIdByNameSingular.opportunity,
+    });
+
+    if (!isDefined(offerNumberFieldName)) {
+      return [];
+    }
+
+    const opportunities = await this.findOpportunitiesWithOfferNumber({
+      offerNumberFieldName,
+      transactionScope,
+    });
+
+    return parentIds.flatMap((parentId) =>
+      selectOpportunityIdsForMessageThread({
+        opportunities,
+        subjects: subjectsByParentId.get(parentId) ?? [],
+      }).map((opportunityId) => ({
+        parentId,
+        targetPersonId: null,
+        targetCompanyId: null,
+        targetOpportunityId: opportunityId,
+      })),
+    );
+  }
+
+  private async findOpportunitiesWithOfferNumber({
+    offerNumberFieldName,
+    transactionScope,
+  }: {
+    offerNumberFieldName: string;
+    transactionScope?: WorkspaceTransactionScope;
+  }): Promise<OpportunitySubjectMatchCandidate[]> {
+    const opportunityRepository =
+      await this.getRepository<OpportunityWorkspaceEntity>(
+        'opportunity',
+        transactionScope,
+      );
+    const opportunities: OpportunitySubjectMatchCandidate[] = [];
+    let lastOpportunityId: string | undefined;
+    let hasMoreOpportunities = true;
+
+    while (hasMoreOpportunities) {
+      const opportunityRows = await opportunityRepository.find({
+        where: {
+          [offerNumberFieldName]: Not(IsNull()),
+          ...(isDefined(lastOpportunityId)
+            ? { id: MoreThan(lastOpportunityId) }
+            : {}),
+        },
+        select: ['id', offerNumberFieldName],
+        order: { id: 'ASC' },
+        take: QUERY_MAX_RECORDS,
+      });
+
+      for (const opportunity of opportunityRows) {
+        // N° Offre is a workspace column, so it is not on the standard opportunity type.
+        const rawOfferNumber = (
+          opportunity as OpportunityWorkspaceEntity & Record<string, unknown>
+        )[offerNumberFieldName];
+
+        opportunities.push({
+          id: opportunity.id,
+          offerNumber: isString(rawOfferNumber) ? rawOfferNumber : null,
+        });
+      }
+
+      lastOpportunityId = opportunityRows[opportunityRows.length - 1]?.id;
+      hasMoreOpportunities = opportunityRows.length === QUERY_MAX_RECORDS;
+    }
+
+    return opportunities;
   }
 
   private groupParticipantPersonIds<
