@@ -45,6 +45,7 @@ import { MessagingDeleteGroupEmailMessagesService } from 'src/modules/messaging/
 import { MessagingImportFolderMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-import-folder-messages.service';
 import { MessagingGetMessageListService } from 'src/modules/messaging/message-import-manager/services/messaging-get-message-list.service';
 import { MessagingGetMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-get-messages.service';
+import { MessagingImportMessageAttachmentsService } from 'src/modules/messaging/message-import-manager/services/messaging-import-message-attachments.service';
 import { MessageImportExceptionHandlerService } from 'src/modules/messaging/message-import-manager/services/messaging-import-exception-handler.service';
 import { MessagingMessageFolderAssociationService } from 'src/modules/messaging/message-import-manager/services/messaging-message-folder-association.service';
 import { MessagingMessageListFetchService } from 'src/modules/messaging/message-import-manager/services/messaging-message-list-fetch.service';
@@ -109,6 +110,7 @@ import { BlocklistRepository } from 'src/modules/blocklist/repositories/blocklis
     MessagingMessageListFetchService,
     MessagingMessagesImportService,
     MessagingSaveMessagesAndEnqueueContactCreationService,
+    MessagingImportMessageAttachmentsService,
     MessagingGetMessageListService,
     MessagingGetMessagesService,
     MessageImportExceptionHandlerService,
