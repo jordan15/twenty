@@ -5,6 +5,7 @@ import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSide
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { useBuildOpportunityOfferNumberRecordInput } from '@/object-record/hooks/useBuildOpportunityOfferNumberRecordInput';
 import { useBuildRecordInputFromRLSPredicates } from '@/object-record/hooks/useBuildRecordInputFromRLSPredicates';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
@@ -47,6 +48,11 @@ export const useAddNewRecordAndOpenSidePanel = ({
       objectMetadataItem: relationObjectMetadataItem,
     });
 
+  const { buildOpportunityOfferNumberRecordInput } =
+    useBuildOpportunityOfferNumberRecordInput({
+      objectMetadataItem: relationObjectMetadataItem,
+    });
+
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
 
   const apolloCoreClient = useApolloCoreClient();
@@ -75,6 +81,7 @@ export const useAddNewRecordAndOpenSidePanel = ({
 
       const createRecordPayload = {
         ...buildRecordInputFromRLSPredicates(),
+        ...(await buildOpportunityOfferNumberRecordInput()),
         ...buildRecordLabelPayload({
           id: newRecordId,
           searchInput,

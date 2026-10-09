@@ -39,6 +39,23 @@ describe('findOpportunityOfferNumberFieldName', () => {
     ).toBe('nOffre');
   });
 
+  it('accepts the label Numéro d’offre', () => {
+    expect(
+      findOpportunityOfferNumberFieldName({
+        opportunityObjectId: OPPORTUNITY_OBJECT_ID,
+        fields: [
+          {
+            objectMetadataId: OPPORTUNITY_OBJECT_ID,
+            label: "Numéro d'offre",
+            name: 'numeroDOffre',
+            type: FieldMetadataType.TEXT,
+            isActive: true,
+          },
+        ],
+      }),
+    ).toBe('numeroDOffre');
+  });
+
   it('returns undefined when the field is inactive or on another object', () => {
     expect(
       findOpportunityOfferNumberFieldName({
