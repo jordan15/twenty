@@ -5,6 +5,8 @@ import { GraphqlQueryRunnerModule } from 'src/engine/api/graphql/graphql-query-r
 import { WorkspaceResolverBuilderService } from 'src/engine/api/graphql/workspace-resolver-builder/workspace-resolver-builder.service';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 
+import { OpportunityOfferNumberSequenceService } from 'src/modules/opportunity/services/opportunity-offer-number-sequence.service';
+
 import { WorkspaceResolverFactory } from './workspace-resolver.factory';
 
 import { workspaceResolverBuilderFactories } from './factories/factories';
@@ -13,6 +15,7 @@ import { workspaceResolverBuilderFactories } from './factories/factories';
   imports: [GraphqlQueryRunnerModule, FeatureFlagModule, CoreCommonApiModule],
   providers: [
     ...workspaceResolverBuilderFactories,
+    OpportunityOfferNumberSequenceService,
     WorkspaceResolverFactory,
     WorkspaceResolverBuilderService,
   ],

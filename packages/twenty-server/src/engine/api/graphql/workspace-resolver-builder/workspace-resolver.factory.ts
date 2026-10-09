@@ -17,6 +17,7 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatIndexMetadata } from 'src/engine/metadata-modules/flat-index-metadata/types/flat-index-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { getResolverName } from 'src/engine/utils/get-resolver-name.util';
+import { OpportunityOfferNumberSequenceService } from 'src/modules/opportunity/services/opportunity-offer-number-sequence.service';
 
 import { CreateManyResolverFactory } from './factories/create-many-resolver.factory';
 import { CreateOneResolverFactory } from './factories/create-one-resolver.factory';
@@ -52,6 +53,7 @@ export class WorkspaceResolverFactory {
     private readonly mergeManyResolverFactory: MergeManyResolverFactory,
     private readonly groupByResolverFactory: GroupByResolverFactory,
     private readonly workspaceResolverBuilderService: WorkspaceResolverBuilderService,
+    private readonly opportunityOfferNumberSequenceService: OpportunityOfferNumberSequenceService,
   ) {}
 
   async create(
@@ -150,6 +152,11 @@ export class WorkspaceResolverFactory {
           });
         }
       }
+    }
+
+    if (isDefined(resolvers.Query)) {
+      resolvers.Query.opportunityOfferNumberSequence = () =>
+        this.opportunityOfferNumberSequenceService.getNextSequence();
     }
 
     return resolvers;

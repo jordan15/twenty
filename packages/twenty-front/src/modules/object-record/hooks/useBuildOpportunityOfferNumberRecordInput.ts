@@ -1,0 +1,188 @@
+import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { type RecordGqlOperationFindManyResult } from '@/object-record/graphql/types/RecordGqlOperationFindManyResult';
+import { useFindManyRecordsQuery } from '@/object-record/hooks/useFindManyRecordsQuery';
+import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import {
+  buildOpportunityOfferNumber,
+  buildWorkspaceMemberInitials,
+  findOpportunityOfferNumberField,
+  getOpportunityOfferNumberYearBounds,
+  resolveOpportunityOfferNumber,
+} from '@/object-record/utils/buildOpportunityOfferNumber';
+import { isNonEmptyString, isString } from '@sniptt/guards';
+import gql from 'graphql-tag';
+import { useStore } from 'jotai';
+import { useCallback } from 'react';
+import { QUERY_MAX_RECORDS } from 'twenty-shared/constants';
+import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+
+const OPPORTUNITY_OFFER_NUMBER_SEQUENCE_QUERY = gql`
+  query OpportunityOfferNumberSequence {
+    opportunityOfferNumberSequence
+  }
+`;
+
+const MAXIMUM_OFFER_NUMBER_PAGES = 50;
+
+export const useBuildOpportunityOfferNumberRecordInput = ({
+  objectMetadataItem,
+}: {
+  objectMetadataItem: EnrichedObjectMetadataItem;
+}) => {
+  const store = useStore();
+  const apolloCoreClient = useApolloCoreClient();
+  const objectPermissions = useObjectPermissionsForObject(
+    objectMetadataItem.id,
+  );
+
+  const offerNumberField = findOpportunityOfferNumberField({
+    fields: objectMetadataItem.fields,
+  });
+
+  const { findManyRecordsQuery } = useFindManyRecordsQuery({
+    objectNameSingular: objectMetadataItem.nameSingular,
+    recordGqlFields: isDefined(offerNumberField)
+      ? { id: true, [offerNumberField.name]: true }
+      : undefined,
+  });
+
+  const buildOpportunityOfferNumberRecordInput = useCallback(
+    async (
+      recordInput?: Partial<ObjectRecord>,
+    ): Promise<Partial<ObjectRecord>> => {
+      if (
+        objectMetadataItem.nameSingular !==
+          CoreObjectNameSingular.Opportunity ||
+        !isDefined(offerNumberField) ||
+        !objectPermissions.canReadObjectRecords ||
+        objectPermissions.restrictedFields[offerNumberField.id ?? '']
+          ?.canUpdate === false
+      ) {
+        return {};
+      }
+
+      const currentValue = recordInput?.[offerNumberField.name];
+
+      if (isString(currentValue) && isNonEmptyString(currentValue.trim())) {
+        return {};
+      }
+
+      const initials = buildWorkspaceMemberInitials(
+        store.get(currentWorkspaceMemberState.atom)?.name,
+      );
+
+      if (!isDefined(initials)) {
+        return {};
+      }
+
+      const now = new Date();
+
+      try {
+        const sequenceResult = await apolloCoreClient.query<{
+          opportunityOfferNumberSequence?: number | null;
+        }>({
+          query: OPPORTUNITY_OFFER_NUMBER_SEQUENCE_QUERY,
+          fetchPolicy: 'network-only',
+        });
+        const workspaceSequence =
+          sequenceResult.data?.opportunityOfferNumberSequence;
+
+        if (
+          typeof workspaceSequence === 'number' &&
+          Number.isFinite(workspaceSequence)
+        ) {
+          return {
+            [offerNumberField.name]: buildOpportunityOfferNumber({
+              date: now,
+              initials,
+              sequence: workspaceSequence,
+            }),
+          };
+        }
+      } catch {
+        // The workspace sequence query can be missing on a server that has not
+        // reloaded its schema. Fall back to the records this member can read.
+      }
+
+      const { gte, lte } = getOpportunityOfferNumberYearBounds(now);
+      let yearlyOpportunityCount = 0;
+      let existingOfferNumbers: string[] = [];
+
+      try {
+        let lastCursor: string | undefined;
+        let page = 0;
+
+        while (page < MAXIMUM_OFFER_NUMBER_PAGES) {
+          const result =
+            await apolloCoreClient.query<RecordGqlOperationFindManyResult>({
+              query: findManyRecordsQuery,
+              variables: {
+                // A field filter keeps only the first comparator, so the year
+                // bounds have to be separate conditions.
+                filter: {
+                  and: [{ createdAt: { gte } }, { createdAt: { lte } }],
+                },
+                orderBy: [{ createdAt: 'DescNullsLast' }],
+                limit: QUERY_MAX_RECORDS,
+                lastCursor,
+              },
+              fetchPolicy: 'network-only',
+            });
+
+          const connection = result.data?.[objectMetadataItem.namePlural];
+          const countedOpportunities = Number(connection?.totalCount);
+
+          if (Number.isFinite(countedOpportunities)) {
+            yearlyOpportunityCount = countedOpportunities;
+          }
+
+          existingOfferNumbers = [
+            ...existingOfferNumbers,
+            ...(connection?.edges ?? []).flatMap((edge) => {
+              const offerNumber = edge.node?.[offerNumberField.name];
+
+              return isString(offerNumber) ? [offerNumber] : [];
+            }),
+          ];
+
+          if (
+            connection?.pageInfo?.hasNextPage !== true ||
+            !isNonEmptyString(connection.pageInfo.endCursor)
+          ) {
+            break;
+          }
+
+          lastCursor = connection.pageInfo.endCursor;
+          page += 1;
+        }
+      } catch {
+        // Still propose YYWW-initials-100 when the yearly count cannot be loaded.
+      }
+
+      return {
+        [offerNumberField.name]: resolveOpportunityOfferNumber({
+          date: now,
+          initials,
+          yearlyOpportunityCount,
+          existingOfferNumbers,
+        }),
+      };
+    },
+    [
+      apolloCoreClient,
+      findManyRecordsQuery,
+      objectMetadataItem.namePlural,
+      objectMetadataItem.nameSingular,
+      objectPermissions.canReadObjectRecords,
+      objectPermissions.restrictedFields,
+      offerNumberField,
+      store,
+    ],
+  );
+
+  return { buildOpportunityOfferNumberRecordInput };
+};
