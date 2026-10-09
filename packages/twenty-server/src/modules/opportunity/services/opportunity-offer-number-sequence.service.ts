@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 
-import { isString } from '@sniptt/guards';
 import { endOfISOWeekYear, getISOWeekYear, startOfISOWeekYear } from 'date-fns';
+import { Between } from 'typeorm';
 import { isDefined } from 'twenty-shared/utils';
 
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { findOpportunityOfferNumberFieldName } from 'src/modules/match-participant/utils/find-opportunity-offer-number-field-name.util';
-import { computeOpportunityOfferNumberSequence } from 'src/modules/opportunity/utils/compute-opportunity-offer-number-sequence.util';
+import { computeOpportunityOfferNumberSequenceFromOpportunities } from 'src/modules/opportunity/utils/compute-opportunity-offer-number-sequence.util';
 
 const OFFER_NUMBER_FIELD_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
 
@@ -43,41 +43,38 @@ export class OpportunityOfferNumberSequenceService {
           ? offerNumberFieldName
           : undefined;
       const now = new Date();
+      const rangeStart = startOfISOWeekYear(now);
+      const rangeEnd = endOfISOWeekYear(now);
       const yearPrefix = String(getISOWeekYear(now) % 100).padStart(2, '0');
       const queryBuilder = repository.createQueryBuilder('opportunity');
 
       queryBuilder.setFindOptions({
         select: {
           id: true,
+          createdAt: true,
           ...(isDefined(selectableFieldName)
             ? { [selectableFieldName]: true }
             : {}),
         },
       });
       queryBuilder.withDeleted();
-      queryBuilder.andWhere(
-        '"opportunity"."createdAt" >= :offerNumberYearStart AND "opportunity"."createdAt" <= :offerNumberYearEnd',
-        {
-          offerNumberYearStart: startOfISOWeekYear(now),
-          offerNumberYearEnd: endOfISOWeekYear(now),
-        },
-      );
+      // Bound the read to this ISO week-year. The helper counts createdAt
+      // again so rows outside that range cannot advance the chrono.
+      queryBuilder.andWhere({
+        createdAt: Between(rangeStart, rangeEnd),
+      });
 
-      const opportunities = await queryBuilder.getMany<
-        Record<string, unknown>
-      >();
-      const offerNumbers = isDefined(selectableFieldName)
-        ? opportunities.flatMap((opportunity) => {
-            const offerNumber = opportunity[selectableFieldName];
+      const opportunities = await queryBuilder.getMany<{
+        createdAt?: unknown;
+        [fieldName: string]: unknown;
+      }>();
 
-            return isString(offerNumber) ? [offerNumber] : [];
-          })
-        : [];
-
-      return computeOpportunityOfferNumberSequence({
-        yearlyOpportunityCount: opportunities.length,
-        offerNumbers,
+      return computeOpportunityOfferNumberSequenceFromOpportunities({
+        opportunities,
+        offerNumberFieldName: selectableFieldName,
         yearPrefix,
+        rangeStart,
+        rangeEnd,
       });
     });
   }

@@ -8,6 +8,7 @@ import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import {
   buildOpportunityOfferNumber,
   buildWorkspaceMemberInitials,
+  collectOpportunityOfferNumberSequenceInputs,
   findOpportunityOfferNumberField,
   getOpportunityOfferNumberYearBounds,
   resolveOpportunityOfferNumber,
@@ -46,7 +47,7 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
   const { findManyRecordsQuery } = useFindManyRecordsQuery({
     objectNameSingular: objectMetadataItem.nameSingular,
     recordGqlFields: isDefined(offerNumberField)
-      ? { id: true, [offerNumberField.name]: true }
+      ? { id: true, createdAt: true, [offerNumberField.name]: true }
       : undefined,
   });
 
@@ -109,8 +110,10 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
       }
 
       const { gte, lte } = getOpportunityOfferNumberYearBounds(now);
-      let yearlyOpportunityCount = 0;
-      let existingOfferNumbers: string[] = [];
+      const loadedOpportunities: {
+        createdAt?: unknown;
+        [fieldName: string]: unknown;
+      }[] = [];
 
       try {
         let lastCursor: string | undefined;
@@ -134,20 +137,13 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
             });
 
           const connection = result.data?.[objectMetadataItem.namePlural];
-          const countedOpportunities = Number(connection?.totalCount);
 
-          if (Number.isFinite(countedOpportunities)) {
-            yearlyOpportunityCount = countedOpportunities;
-          }
-
-          existingOfferNumbers = [
-            ...existingOfferNumbers,
-            ...(connection?.edges ?? []).flatMap((edge) => {
-              const offerNumber = edge.node?.[offerNumberField.name];
-
-              return isString(offerNumber) ? [offerNumber] : [];
-            }),
-          ];
+          loadedOpportunities.push(
+            ...(connection?.edges ?? []).map((edge) => ({
+              createdAt: edge.node?.createdAt,
+              [offerNumberField.name]: edge.node?.[offerNumberField.name],
+            })),
+          );
 
           if (
             connection?.pageInfo?.hasNextPage !== true ||
@@ -162,6 +158,15 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
       } catch {
         // Still propose YYWW-initials-100 when the yearly count cannot be loaded.
       }
+
+      // totalCount follows the connection filter. When that filter drops a
+      // bound it is the all-time total, so the chrono is counted from createdAt.
+      const { yearlyOpportunityCount, existingOfferNumbers } =
+        collectOpportunityOfferNumberSequenceInputs({
+          opportunities: loadedOpportunities,
+          date: now,
+          offerNumberFieldName: offerNumberField.name,
+        });
 
       return {
         [offerNumberField.name]: resolveOpportunityOfferNumber({
