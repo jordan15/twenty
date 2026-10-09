@@ -1,0 +1,170 @@
+import { FieldMetadataType } from 'twenty-shared/types';
+
+import {
+  buildOpportunityOfferNumber,
+  buildWorkspaceMemberInitials,
+  computeNextOpportunityOfferSequence,
+  findOpportunityOfferNumberField,
+  getOpportunityOfferNumberYearBounds,
+  resolveOpportunityOfferNumber,
+} from '@/object-record/utils/buildOpportunityOfferNumber';
+
+describe('findOpportunityOfferNumberField', () => {
+  it('finds an active text field labeled N° Offre or Numéro d’offre', () => {
+    expect(
+      findOpportunityOfferNumberField({
+        fields: [
+          {
+            label: 'N° Offre',
+            name: 'nOffre',
+            type: FieldMetadataType.TEXT,
+            isActive: true,
+          },
+        ],
+      })?.name,
+    ).toBe('nOffre');
+
+    expect(
+      findOpportunityOfferNumberField({
+        fields: [
+          {
+            label: "Numéro d'offre",
+            name: 'numeroDOffre',
+            type: FieldMetadataType.TEXT,
+            isActive: true,
+          },
+        ],
+      })?.name,
+    ).toBe('numeroDOffre');
+  });
+
+  it('ignores an inactive field and a field on another type', () => {
+    expect(
+      findOpportunityOfferNumberField({
+        fields: [
+          {
+            label: 'N° Offre',
+            name: 'nOffre',
+            type: FieldMetadataType.TEXT,
+            isActive: false,
+          },
+          {
+            label: 'N° Offre',
+            name: 'nOffreNumber',
+            type: FieldMetadataType.NUMBER,
+            isActive: true,
+          },
+          undefined,
+        ],
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe('buildWorkspaceMemberInitials', () => {
+  it('uses the first latin letter of the first and last name', () => {
+    expect(
+      buildWorkspaceMemberInitials({
+        firstName: 'Élodie',
+        lastName: 'Martin',
+      }),
+    ).toBe('EM');
+  });
+
+  it('returns undefined when the name has no letters', () => {
+    expect(
+      buildWorkspaceMemberInitials({ firstName: ' ', lastName: '-' }),
+    ).toBeUndefined();
+    expect(buildWorkspaceMemberInitials(null)).toBeUndefined();
+  });
+});
+
+describe('buildOpportunityOfferNumber', () => {
+  it('formats the ISO week-year, week, initials and sequence', () => {
+    expect(
+      buildOpportunityOfferNumber({
+        date: new Date(2026, 9, 9),
+        initials: 'JG',
+        sequence: 100,
+      }),
+    ).toBe('2641-JG-100');
+  });
+
+  it('pads single-digit weeks', () => {
+    expect(
+      buildOpportunityOfferNumber({
+        date: new Date(2026, 0, 1),
+        initials: 'PN',
+        sequence: 105,
+      }),
+    ).toBe('2601-PN-105');
+  });
+
+  it('uses the ISO week-year at the start of January', () => {
+    expect(
+      buildOpportunityOfferNumber({
+        date: new Date(2027, 0, 1),
+        initials: 'PN',
+        sequence: 100,
+      }),
+    ).toBe('2653-PN-100');
+  });
+});
+
+describe('computeNextOpportunityOfferSequence', () => {
+  it('starts at 100 when the year has no opportunities', () => {
+    expect(
+      computeNextOpportunityOfferSequence({
+        yearlyOpportunityCount: 0,
+        existingOfferNumbers: [],
+        yearPrefix: '26',
+      }),
+    ).toBe(100);
+  });
+
+  it('adds the number of opportunities created this year', () => {
+    expect(
+      computeNextOpportunityOfferSequence({
+        yearlyOpportunityCount: 5,
+        existingOfferNumbers: ['2641-JG-100', '2602-PN-104'],
+        yearPrefix: '26',
+      }),
+    ).toBe(105);
+  });
+
+  it('continues after a higher existing sequence', () => {
+    expect(
+      computeNextOpportunityOfferSequence({
+        yearlyOpportunityCount: 2,
+        existingOfferNumbers: ['2641-JG-100', '2610-PN-108', '2512-AB-900'],
+        yearPrefix: '26',
+      }),
+    ).toBe(109);
+  });
+});
+
+describe('resolveOpportunityOfferNumber', () => {
+  it('proposes the next number for the creator', () => {
+    expect(
+      resolveOpportunityOfferNumber({
+        date: new Date(2026, 9, 9),
+        initials: 'JG',
+        yearlyOpportunityCount: 3,
+        existingOfferNumbers: ['2608-AB-100', '2639-CD-101', '2640-JG-102'],
+      }),
+    ).toBe('2641-JG-103');
+  });
+});
+
+describe('getOpportunityOfferNumberYearBounds', () => {
+  it('covers the ISO week-year, including the boundary weeks', () => {
+    const bounds = getOpportunityOfferNumberYearBounds(
+      new Date(2026, 9, 9, 15, 30),
+    );
+
+    expect(bounds.gte < '2026-01-01').toBe(true);
+    expect(bounds.lte > '2026-12-31').toBe(true);
+    expect(new Date(2026, 9, 9).toISOString() >= bounds.gte).toBe(true);
+    expect(new Date(2026, 9, 9).toISOString() <= bounds.lte).toBe(true);
+  });
+});
