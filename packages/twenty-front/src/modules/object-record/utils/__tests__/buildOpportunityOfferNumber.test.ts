@@ -3,6 +3,7 @@ import { CoreObjectNameSingular, FieldMetadataType } from 'twenty-shared/types';
 import {
   buildOpportunityOfferNumber,
   buildWorkspaceMemberInitials,
+  collectOpportunityOfferNumberSequenceInputs,
   computeNextOpportunityOfferSequence,
   findOpportunityOfferNumberField,
   getOpportunityOfferNumberYearBounds,
@@ -191,6 +192,76 @@ describe('resolveOpportunityOfferNumber', () => {
         existingOfferNumbers: ['2608-AB-100', '2639-CD-101', '2640-JG-102'],
       }),
     ).toBe('2641-JG-103');
+  });
+});
+
+describe('collectOpportunityOfferNumberSequenceInputs', () => {
+  const date = new Date(2026, 9, 9);
+
+  it('does not count 2025 opportunities toward a 2026 suffix of 311', () => {
+    const opportunities = [
+      ...Array.from({ length: 200 }, (_, index) => ({
+        createdAt: '2025-06-01T00:00:00.000Z',
+        nOffre: `2510-AB-${100 + index}`,
+      })),
+      ...[
+        '2641-YC-272',
+        '2641-YC-270',
+        '2641-SM-272',
+        '2641-SM-271',
+        '2640-NF-269',
+        '2639-YC-268',
+        '2639-SM-267',
+        '2641-JG-260',
+        '2641-JG-261',
+        '2641-JG-262',
+        '2541-YC-900',
+      ].map((offerNumber) => ({
+        createdAt: new Date(2026, 9, 1).toISOString(),
+        nOffre: offerNumber,
+      })),
+    ];
+    const { yearlyOpportunityCount, existingOfferNumbers } =
+      collectOpportunityOfferNumberSequenceInputs({
+        opportunities,
+        date,
+        offerNumberFieldName: 'nOffre',
+      });
+
+    expect(opportunities).toHaveLength(211);
+    expect(yearlyOpportunityCount).toBe(11);
+    expect(
+      computeNextOpportunityOfferSequence({
+        yearlyOpportunityCount,
+        existingOfferNumbers,
+        yearPrefix: '26',
+      }),
+    ).toBe(273);
+  });
+
+  it('stays at or above 312 when 2641-AO-311 is already used', () => {
+    const { yearlyOpportunityCount, existingOfferNumbers } =
+      collectOpportunityOfferNumberSequenceInputs({
+        opportunities: [
+          { createdAt: '2025-06-01T00:00:00.000Z', nOffre: '2541-AB-900' },
+          { createdAt: '2025-06-02T00:00:00.000Z', nOffre: '2641-AO-311' },
+          {
+            createdAt: new Date(2026, 9, 1).toISOString(),
+            nOffre: '2641-SM-272',
+          },
+        ],
+        date,
+        offerNumberFieldName: 'nOffre',
+      });
+
+    expect(yearlyOpportunityCount).toBe(1);
+    expect(
+      computeNextOpportunityOfferSequence({
+        yearlyOpportunityCount,
+        existingOfferNumbers,
+        yearPrefix: '26',
+      }),
+    ).toBe(312);
   });
 });
 

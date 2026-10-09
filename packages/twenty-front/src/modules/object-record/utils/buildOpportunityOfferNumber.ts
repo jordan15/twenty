@@ -1,3 +1,4 @@
+import { isString } from '@sniptt/guards';
 import {
   endOfISOWeekYear,
   getISOWeek,
@@ -120,6 +121,74 @@ export const getOpportunityOfferNumberYearBounds = (
   gte: startOfISOWeekYear(date).toISOString(),
   lte: endOfISOWeekYear(date).toISOString(),
 });
+
+const readCreatedAtTime = (createdAt: unknown): number | undefined => {
+  if (createdAt instanceof Date) {
+    const time = createdAt.getTime();
+
+    return Number.isNaN(time) ? undefined : time;
+  }
+
+  if (!isString(createdAt) || createdAt.trim().length === 0) {
+    return undefined;
+  }
+
+  const time = new Date(createdAt).getTime();
+
+  return Number.isNaN(time) ? undefined : time;
+};
+
+// totalCount on an unfiltered findMany is every opportunity ever created.
+export const isOpportunityCreatedInIsoWeekYear = ({
+  createdAt,
+  date,
+}: {
+  createdAt: unknown;
+  date: Date;
+}): boolean => {
+  const createdAtTime = readCreatedAtTime(createdAt);
+
+  if (!isDefined(createdAtTime)) {
+    return false;
+  }
+
+  const rangeStart = startOfISOWeekYear(date).getTime();
+  const rangeEnd = endOfISOWeekYear(date).getTime();
+
+  return createdAtTime >= rangeStart && createdAtTime <= rangeEnd;
+};
+
+export const collectOpportunityOfferNumberSequenceInputs = ({
+  opportunities,
+  date,
+  offerNumberFieldName,
+}: {
+  opportunities: readonly {
+    createdAt?: unknown;
+    [fieldName: string]: unknown;
+  }[];
+  date: Date;
+  offerNumberFieldName: string;
+}): {
+  yearlyOpportunityCount: number;
+  existingOfferNumbers: string[];
+} => {
+  const yearlyOpportunityCount = opportunities.filter((opportunity) =>
+    isOpportunityCreatedInIsoWeekYear({
+      createdAt: opportunity.createdAt,
+      date,
+    }),
+  ).length;
+
+  return {
+    yearlyOpportunityCount,
+    existingOfferNumbers: opportunities.flatMap((opportunity) => {
+      const offerNumber = opportunity[offerNumberFieldName];
+
+      return isString(offerNumber) ? [offerNumber] : [];
+    }),
+  };
+};
 
 const OFFER_NUMBER_SEQUENCE_PATTERN = /^(\d{2})\d{2}-[^-]+-(\d+)$/;
 
