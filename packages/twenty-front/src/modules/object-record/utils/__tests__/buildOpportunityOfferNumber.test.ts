@@ -198,10 +198,11 @@ describe('resolveOpportunityOfferNumber', () => {
 describe('collectOpportunityOfferNumberSequenceInputs', () => {
   const date = new Date(2026, 9, 9);
 
-  it('does not count 2025 opportunities toward a 2026 suffix of 311', () => {
+  it('does not count 2025 offer numbers when every row was imported the same day', () => {
+    const importedAt = new Date(2026, 9, 9).toISOString();
     const opportunities = [
       ...Array.from({ length: 200 }, (_, index) => ({
-        createdAt: '2025-06-01T00:00:00.000Z',
+        createdAt: importedAt,
         nOffre: `2510-AB-${100 + index}`,
       })),
       ...[
@@ -217,7 +218,7 @@ describe('collectOpportunityOfferNumberSequenceInputs', () => {
         '2641-JG-262',
         '2541-YC-900',
       ].map((offerNumber) => ({
-        createdAt: new Date(2026, 9, 1).toISOString(),
+        createdAt: importedAt,
         nOffre: offerNumber,
       })),
     ];
@@ -229,7 +230,7 @@ describe('collectOpportunityOfferNumberSequenceInputs', () => {
       });
 
     expect(opportunities).toHaveLength(211);
-    expect(yearlyOpportunityCount).toBe(11);
+    expect(yearlyOpportunityCount).toBe(10);
     expect(
       computeNextOpportunityOfferSequence({
         yearlyOpportunityCount,
@@ -243,10 +244,10 @@ describe('collectOpportunityOfferNumberSequenceInputs', () => {
     const { yearlyOpportunityCount, existingOfferNumbers } =
       collectOpportunityOfferNumberSequenceInputs({
         opportunities: [
-          { createdAt: '2025-06-01T00:00:00.000Z', nOffre: '2541-AB-900' },
-          { createdAt: '2025-06-02T00:00:00.000Z', nOffre: '2641-AO-311' },
+          { createdAt: '2026-10-09T10:00:00.000Z', nOffre: '2541-AB-900' },
+          { createdAt: '2026-10-09T10:00:00.000Z', nOffre: '2641-AO-311' },
           {
-            createdAt: new Date(2026, 9, 1).toISOString(),
+            createdAt: '2026-10-09T10:00:00.000Z',
             nOffre: '2641-SM-272',
           },
         ],
@@ -254,7 +255,7 @@ describe('collectOpportunityOfferNumberSequenceInputs', () => {
         offerNumberFieldName: 'nOffre',
       });
 
-    expect(yearlyOpportunityCount).toBe(1);
+    expect(yearlyOpportunityCount).toBe(2);
     expect(
       computeNextOpportunityOfferSequence({
         yearlyOpportunityCount,
