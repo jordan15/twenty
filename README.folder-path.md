@@ -98,6 +98,20 @@ Publier `main` sur le fork remplace l’historique de la branche (les commits re
 git push --force-with-lease origin main
 ```
 
+## Ouvrir un dossier est lent (~2 s)
+
+Ce délai n’est pas le serveur Twenty. Le clic **Ouvrir** lance un protocole
+Windows `openfoldercrm://` sur le poste de l’utilisateur. L’ancienne commande
+démarrait `powershell.exe` à chaque clic (souvent 0,5 à 2 s, plus avec
+l’antivirus). La RAM du serveur n’intervient pas : aucune requête n’est
+envoyée.
+
+Le correctif est côté postes, pas dans l’image Docker. Déployer
+`packages/twenty-docker/windows-open-folder/openfoldercrm.js` vers
+`C:\Program Files\OpenFolderCRM\openfoldercrm.js`, puis réimporter
+`openfoldercrm.reg`. Détail et GPO : le README de ce dossier. Reconstruire
+`twentycrm/twenty:folder-path` ne change pas ce clic.
+
 ## Mettre à jour le serveur
 
 À faire après un build de `twentycrm/twenty:folder-path` sur le code aligné. Les volumes Postgres et le stockage local ne se suppriment pas. `ENCRYPTION_KEY`, `APP_SECRET` et le mot de passe de base restent ceux déjà en place.
