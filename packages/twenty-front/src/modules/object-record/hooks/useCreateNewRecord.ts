@@ -1,5 +1,6 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { getLabelIdentifierFieldMetadataItem } from '@/object-metadata/utils/getLabelIdentifierFieldMetadataItem';
+import { useBuildOpportunityOfferNumberRecordInput } from '@/object-record/hooks/useBuildOpportunityOfferNumberRecordInput';
 import { useBuildRecordInputFromRLSPredicates } from '@/object-record/hooks/useBuildRecordInputFromRLSPredicates';
 import { useRecordCreationForm } from '@/object-record/record-form/hooks/useRecordCreationForm';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
@@ -58,6 +59,11 @@ export const useCreateNewRecord = ({
       objectMetadataItem,
     });
 
+  const { buildOpportunityOfferNumberRecordInput } =
+    useBuildOpportunityOfferNumberRecordInput({
+      objectMetadataItem,
+    });
+
   const createRecord = useCallback(
     async (recordInput?: Partial<ObjectRecord>) => {
       const recordId = v4();
@@ -84,19 +90,30 @@ export const useCreateNewRecord = ({
     async (recordInput?: Partial<ObjectRecord>) => {
       let submittedRecordInput = recordInput;
 
-      const createdRecord = isRecordCreationFormEnabled
-        ? await requestRecordCreation({
-            initialDraftRecord: {
-              ...buildRecordInputFromRLSPredicates(),
-              ...buildRecordInput?.(),
-              ...recordInput,
-            },
-            createRecord: (draftRecord) => {
-              submittedRecordInput = { ...recordInput, ...draftRecord };
-              return createRecord(submittedRecordInput);
-            },
-          })
-        : await createRecord(recordInput);
+      const offerNumberRecordInput =
+        await buildOpportunityOfferNumberRecordInput(recordInput);
+
+      const initialRecordInput = {
+        ...buildRecordInputFromRLSPredicates(),
+        ...offerNumberRecordInput,
+        ...buildRecordInput?.(),
+        ...recordInput,
+      };
+
+      let createdRecord: ObjectRecord | null | undefined;
+
+      if (isRecordCreationFormEnabled) {
+        createdRecord = await requestRecordCreation({
+          initialDraftRecord: initialRecordInput,
+          createRecord: (draftRecord) => {
+            submittedRecordInput = { ...recordInput, ...draftRecord };
+            return createRecord(submittedRecordInput);
+          },
+        });
+      } else {
+        submittedRecordInput = initialRecordInput;
+        createdRecord = await createRecord(initialRecordInput);
+      }
 
       if (!isDefined(createdRecord)) {
         return;
@@ -155,6 +172,7 @@ export const useCreateNewRecord = ({
       return createdRecord;
     },
     [
+      buildOpportunityOfferNumberRecordInput,
       buildRecordInputFromRLSPredicates,
       buildRecordInput,
       createRecord,

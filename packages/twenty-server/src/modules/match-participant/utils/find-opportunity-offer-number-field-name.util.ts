@@ -3,8 +3,6 @@ import { isDefined } from 'twenty-shared/utils';
 
 // The workspace disambiguates several deals of the same contact by typing this
 // unique opportunity field into the email subject.
-const OPPORTUNITY_OFFER_NUMBER_FIELD_LABEL = 'N° Offre';
-
 const normalizeFieldLabel = (label: string): string =>
   label
     .normalize('NFD')
@@ -12,9 +10,14 @@ const normalizeFieldLabel = (label: string): string =>
     .replace(/[^a-zA-Z0-9]/g, '')
     .toLowerCase();
 
-const NORMALIZED_OPPORTUNITY_OFFER_NUMBER_FIELD_LABEL = normalizeFieldLabel(
-  OPPORTUNITY_OFFER_NUMBER_FIELD_LABEL,
-);
+const NORMALIZED_OPPORTUNITY_OFFER_NUMBER_FIELD_LABELS = new Set([
+  normalizeFieldLabel('N° Offre'),
+  normalizeFieldLabel("N° d'offre"),
+  normalizeFieldLabel("N° de l'offre"),
+  normalizeFieldLabel("Numéro d'offre"),
+  normalizeFieldLabel("Numéro de l'offre"),
+  normalizeFieldLabel('Numéro offre'),
+]);
 
 type OpportunityOfferNumberField = {
   objectMetadataId: string;
@@ -41,7 +44,8 @@ export const findOpportunityOfferNumberFieldName = ({
       field.objectMetadataId === opportunityObjectId &&
       field.isActive &&
       field.type === FieldMetadataType.TEXT &&
-      normalizeFieldLabel(field.label) ===
-        NORMALIZED_OPPORTUNITY_OFFER_NUMBER_FIELD_LABEL,
+      NORMALIZED_OPPORTUNITY_OFFER_NUMBER_FIELD_LABELS.has(
+        normalizeFieldLabel(field.label),
+      ),
   )?.name;
 };
