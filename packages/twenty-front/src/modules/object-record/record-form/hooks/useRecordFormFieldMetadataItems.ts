@@ -2,6 +2,7 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { computeRecordFormFieldMetadataItems } from '@/object-record/record-form/utils/computeRecordFormFieldMetadataItems';
+import { includeOpportunityOfferNumberFieldInRecordForm } from '@/object-record/utils/buildOpportunityOfferNumber';
 import { recordFormPageLayoutByObjectMetadataIdFamilySelector } from '@/page-layout/states/selectors/recordFormPageLayoutByObjectMetadataIdFamilySelector';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { isDefined } from 'twenty-shared/utils';
@@ -20,15 +21,20 @@ export const useRecordFormFieldMetadataItems = ({
     objectMetadataItem.id,
   );
 
-  if (!isDefined(recordFormPageLayout)) {
-    return { recordFormFieldMetadataItems: [] };
-  }
+  const recordFormFieldMetadataItems = isDefined(recordFormPageLayout)
+    ? computeRecordFormFieldMetadataItems({
+        recordFormPageLayout,
+        fieldMetadataItems: objectMetadataItem.fields,
+        restrictedFields: objectPermissions.restrictedFields,
+      })
+    : [];
 
   return {
-    recordFormFieldMetadataItems: computeRecordFormFieldMetadataItems({
-      recordFormPageLayout,
-      fieldMetadataItems: objectMetadataItem.fields,
-      restrictedFields: objectPermissions.restrictedFields,
-    }),
+    recordFormFieldMetadataItems:
+      includeOpportunityOfferNumberFieldInRecordForm({
+        objectNameSingular: objectMetadataItem.nameSingular,
+        fieldMetadataItems: objectMetadataItem.fields,
+        recordFormFieldMetadataItems,
+      }),
   };
 };

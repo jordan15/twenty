@@ -1,4 +1,4 @@
-import { FieldMetadataType } from 'twenty-shared/types';
+import { CoreObjectNameSingular, FieldMetadataType } from 'twenty-shared/types';
 
 import {
   buildOpportunityOfferNumber,
@@ -6,6 +6,7 @@ import {
   computeNextOpportunityOfferSequence,
   findOpportunityOfferNumberField,
   getOpportunityOfferNumberYearBounds,
+  includeOpportunityOfferNumberFieldInRecordForm,
   resolveOpportunityOfferNumber,
 } from '@/object-record/utils/buildOpportunityOfferNumber';
 
@@ -58,6 +59,43 @@ describe('findOpportunityOfferNumberField', () => {
         ],
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('includeOpportunityOfferNumberFieldInRecordForm', () => {
+  const offerNumberField = {
+    id: 'offer-number-field-id',
+    label: "N° d'offre",
+    name: 'nDOffre',
+    type: FieldMetadataType.TEXT,
+    isActive: true,
+  };
+  const nameField = {
+    id: 'name-field-id',
+    label: 'Name',
+    name: 'name',
+    type: FieldMetadataType.TEXT,
+    isActive: true,
+  };
+
+  it('puts the offer number first when the creation form omits it', () => {
+    expect(
+      includeOpportunityOfferNumberFieldInRecordForm({
+        objectNameSingular: CoreObjectNameSingular.Opportunity,
+        fieldMetadataItems: [nameField, offerNumberField],
+        recordFormFieldMetadataItems: [nameField],
+      }).map((field) => field.name),
+    ).toEqual(['nDOffre', 'name']);
+  });
+
+  it('leaves another object form unchanged', () => {
+    expect(
+      includeOpportunityOfferNumberFieldInRecordForm({
+        objectNameSingular: CoreObjectNameSingular.Company,
+        fieldMetadataItems: [nameField, offerNumberField],
+        recordFormFieldMetadataItems: [nameField],
+      }),
+    ).toEqual([nameField]);
   });
 });
 

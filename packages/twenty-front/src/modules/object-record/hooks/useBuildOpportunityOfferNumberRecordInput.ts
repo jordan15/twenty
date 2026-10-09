@@ -71,6 +71,8 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
 
       const now = new Date();
       const { gte, lte } = getOpportunityOfferNumberYearBounds(now);
+      let yearlyOpportunityCount = 0;
+      let existingOfferNumbers: string[] = [];
 
       try {
         const result =
@@ -86,40 +88,33 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
             fetchPolicy: 'network-only',
           });
 
-        if (isDefined(result.error)) {
-          return {};
-        }
-
         const connection = result.data?.[objectMetadataItem.namePlural];
-        const yearlyOpportunityCount = connection?.totalCount;
+        const countedOpportunities = connection?.totalCount;
 
         if (
-          typeof yearlyOpportunityCount !== 'number' ||
-          !Number.isFinite(yearlyOpportunityCount)
+          typeof countedOpportunities === 'number' &&
+          Number.isFinite(countedOpportunities)
         ) {
-          return {};
+          yearlyOpportunityCount = countedOpportunities;
         }
 
-        const existingOfferNumbers = (connection?.edges ?? []).flatMap(
-          (edge) => {
-            const offerNumber = edge.node?.[offerNumberField.name];
+        existingOfferNumbers = (connection?.edges ?? []).flatMap((edge) => {
+          const offerNumber = edge.node?.[offerNumberField.name];
 
-            return isString(offerNumber) ? [offerNumber] : [];
-          },
-        );
-
-        return {
-          [offerNumberField.name]: resolveOpportunityOfferNumber({
-            date: now,
-            initials,
-            yearlyOpportunityCount,
-            existingOfferNumbers,
-          }),
-        };
+          return isString(offerNumber) ? [offerNumber] : [];
+        });
       } catch {
-        // A missing suggestion must not block creating the opportunity.
-        return {};
+        // Still propose YYWW-initials-100 when the yearly count cannot be loaded.
       }
+
+      return {
+        [offerNumberField.name]: resolveOpportunityOfferNumber({
+          date: now,
+          initials,
+          yearlyOpportunityCount,
+          existingOfferNumbers,
+        }),
+      };
     },
     [
       apolloCoreClient,

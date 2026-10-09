@@ -12,7 +12,10 @@ const normalizeFieldLabel = (label: string): string =>
 
 const NORMALIZED_OPPORTUNITY_OFFER_NUMBER_FIELD_LABELS = new Set([
   normalizeFieldLabel('N° Offre'),
+  normalizeFieldLabel("N° d'offre"),
+  normalizeFieldLabel("N° de l'offre"),
   normalizeFieldLabel("Numéro d'offre"),
+  normalizeFieldLabel("Numéro de l'offre"),
   normalizeFieldLabel('Numéro offre'),
 ]);
 

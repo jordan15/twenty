@@ -4,13 +4,16 @@ import {
   getISOWeekYear,
   startOfISOWeekYear,
 } from 'date-fns';
-import { FieldMetadataType } from 'twenty-shared/types';
+import { CoreObjectNameSingular, FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 // Same labels as the server matcher that reads this field from email subjects.
 const NORMALIZED_OPPORTUNITY_OFFER_NUMBER_FIELD_LABELS = new Set([
   'noffre',
+  'ndoffre',
+  'ndeloffre',
   'numerodoffre',
+  'numerodeloffre',
   'numerooffre',
 ]);
 
@@ -29,6 +32,7 @@ export type OpportunityOfferNumberField = {
   name: string;
   type: string;
   isActive: boolean;
+  isUIEditable?: boolean | null;
 };
 
 export const findOpportunityOfferNumberField = ({
@@ -43,8 +47,43 @@ export const findOpportunityOfferNumberField = ({
       field.type === FieldMetadataType.TEXT &&
       NORMALIZED_OPPORTUNITY_OFFER_NUMBER_FIELD_LABELS.has(
         normalizeFieldLabel(field.label),
-      ),
+      ) &&
+      field.isUIEditable !== false,
   );
+
+export const includeOpportunityOfferNumberFieldInRecordForm = <
+  TField extends OpportunityOfferNumberField & { id: string },
+>({
+  objectNameSingular,
+  fieldMetadataItems,
+  recordFormFieldMetadataItems,
+}: {
+  objectNameSingular: string;
+  fieldMetadataItems: readonly TField[];
+  recordFormFieldMetadataItems: readonly TField[];
+}): TField[] => {
+  if (objectNameSingular !== CoreObjectNameSingular.Opportunity) {
+    return [...recordFormFieldMetadataItems];
+  }
+
+  const offerNumberFieldName = findOpportunityOfferNumberField({
+    fields: fieldMetadataItems,
+  })?.name;
+  const offerNumberField = fieldMetadataItems.find(
+    (fieldMetadataItem) => fieldMetadataItem.name === offerNumberFieldName,
+  );
+
+  if (
+    !isDefined(offerNumberField) ||
+    recordFormFieldMetadataItems.some(
+      (fieldMetadataItem) => fieldMetadataItem.id === offerNumberField.id,
+    )
+  ) {
+    return [...recordFormFieldMetadataItems];
+  }
+
+  return [offerNumberField, ...recordFormFieldMetadataItems];
+};
 
 const firstLatinLetter = (value: string): string => {
   const match = value
