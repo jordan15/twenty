@@ -25532,3 +25532,43 @@ msgstr "Zoom avant"
 #: src/modules/settings/data-model/graph-overview/components/SettingsDataModelOverview.tsx
 msgid "Zoom out"
 msgstr "Zoom arrière"
+
+#. js-lingui-id: Ef2unh
+#: src/modules/settings/data-model/fields/forms/components/text/SettingsDataModelFieldTextForm.tsx
+msgid "Folder path"
+msgstr "Chemin de dossier"
+
+#. js-lingui-id: oCZkaG
+#: src/modules/ui/field/display/components/FolderPathDisplay.tsx
+msgid "Copy path"
+msgstr "Copier le chemin"
+
+#. js-lingui-id: PVUn/c
+#: src/modules/ui/field/display/components/FolderPathDisplay.tsx
+msgid "Open folder"
+msgstr "Ouvrir le dossier"
+
+#. js-lingui-id: SlvqEi
+#: src/modules/ui/field/display/components/FolderPathDisplay.tsx
+msgid "Open folder: {path}"
+msgstr "Ouvrir le dossier : {path}"
+
+#. js-lingui-id: MXGpCv
+#: src/modules/ui/field/display/components/FolderPathDisplay.tsx
+msgid "Folder path copied to clipboard"
+msgstr "Chemin de dossier copié dans le presse-papiers"
+
+#. js-lingui-id: gZPEFo
+#: src/modules/ui/field/display/components/FolderPathDisplay.tsx
+msgid "Opening folder… If nothing happens, the folder helper isn't installed on this computer — use Copy and paste the path into your file explorer."
+msgstr "Ouverture du dossier… Si rien ne se passe, l'utilitaire d'ouverture n'est pas installé sur cet ordinateur — utilisez Copier et collez le chemin dans votre explorateur de fichiers."
+
+#. js-lingui-id: jNGrva
+#: src/modules/object-record/record-field/ui/meta-types/input/components/TextFieldInput.tsx
+msgid "Only the folder name could be read — browsers don't expose the absolute path. Complete the full path."
+msgstr "Seul le nom du dossier a pu être lu — les navigateurs n'exposent pas le chemin absolu. Complétez le chemin complet."
+
+#. js-lingui-id: tEvcLW
+#: src/modules/settings/data-model/fields/forms/components/text/SettingsDataModelFieldTextForm.tsx
+msgid "Treat the value as a system folder path with copy and open actions"
+msgstr "Traiter la valeur comme un chemin de dossier système avec des actions de copie et d'ouverture"
