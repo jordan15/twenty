@@ -48,7 +48,7 @@ export class MicrosoftGetMessagesService {
         connectedAccount,
       );
 
-      return messages;
+      return this.attachFileContents(messages, connectedAccount);
     } catch (error) {
       this.microsoftMessagesImportErrorHandler.handleError(error);
 
@@ -173,6 +173,34 @@ export class MicrosoftGetMessagesService {
     });
 
     return messages.filter(isDefined);
+  }
+
+  private async attachFileContents(
+    messages: MessageWithParticipants[],
+    connectedAccount: ConnectedAccountType,
+  ): Promise<MessageWithParticipants[]> {
+    return Promise.all(
+      messages.map(async (message) => {
+        try {
+          const attachments =
+            await this.microsoftFetchByBatchService.fetchFileAttachments(
+              message.externalId,
+              connectedAccount,
+            );
+
+          return {
+            ...message,
+            attachments,
+          };
+        } catch (error) {
+          this.logger.warn(
+            `Skipped Microsoft attachments on message ${message.externalId}: ${error}`,
+          );
+
+          return message;
+        }
+      }),
+    );
   }
 
   private parseBatchResponse(batchResponse: MicrosoftGraphBatchResponse) {

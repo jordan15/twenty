@@ -252,6 +252,14 @@ export class MessagingMessageListFetchService {
             `WorkspaceId: ${workspaceId}, MessageChannelId: ${freshMessageChannel.id} - Total messages to import count: ${totalMessagesToImportCount}`,
           );
 
+          if (isDefined(freshMessageChannel.connectedAccount)) {
+            await this.messagingMessagesImportService.importMissingEmailAttachments(
+              freshMessageChannel,
+              freshMessageChannel.connectedAccount,
+              workspaceId,
+            );
+          }
+
           if (totalMessagesToImportCount === 0) {
             await this.messageChannelSyncStatusService.markAsMessageSyncCompleted(
               [freshMessageChannel.id],

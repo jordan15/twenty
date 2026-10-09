@@ -24,6 +24,7 @@ import {
   type ParticipantWithMessageId,
 } from 'src/modules/messaging/message-import-manager/drivers/gmail/types/gmail-message.type';
 import { MessagingMessageFolderAssociationService } from 'src/modules/messaging/message-import-manager/services/messaging-message-folder-association.service';
+import { MessagingImportMessageAttachmentsService } from 'src/modules/messaging/message-import-manager/services/messaging-import-message-attachments.service';
 import { MessagingMessageService } from 'src/modules/messaging/message-import-manager/services/messaging-message.service';
 import { type MessageChannelMessageAssociationFolderAssociation } from 'src/modules/messaging/message-import-manager/types/message-channel-message-association-folder-association.type';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message.type';
@@ -39,6 +40,7 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     private readonly messageService: MessagingMessageService,
     private readonly messageParticipantService: MessagingMessageParticipantService,
     private readonly messageFolderAssociationService: MessagingMessageFolderAssociationService,
+    private readonly importMessageAttachmentsService: MessagingImportMessageAttachmentsService,
     private readonly workspaceOrmManager: WorkspaceOrmManager,
   ) {}
 
@@ -214,6 +216,13 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         messageChannel.type === MessageChannelType.APP
           ? 'targetsOnly'
           : 'workspaceMemberAndPerson',
+    });
+
+    await this.importMessageAttachmentsService.importAttachments({
+      messages: messagesToSave,
+      messageIdByExternalId:
+        savedMessagesResult.messageExternalIdsAndIdsMap,
+      workspaceId,
     });
 
     return {

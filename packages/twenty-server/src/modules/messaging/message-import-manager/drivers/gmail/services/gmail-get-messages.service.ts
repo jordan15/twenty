@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { batchFetchImplementation } from '@jrmdayn/googleapis-batcher';
 import { isNonEmptyString } from '@sniptt/guards';
@@ -13,12 +13,16 @@ import { MESSAGING_GMAIL_EXCLUDED_SYSTEM_LABELS } from 'src/modules/messaging/me
 import { GmailMessagesImportErrorHandler } from 'src/modules/messaging/message-import-manager/drivers/gmail/services/gmail-messages-import-error-handler.service';
 import { filterGmailMessagesByFolderPolicy } from 'src/modules/messaging/message-import-manager/drivers/gmail/utils/filter-gmail-messages-by-folder-policy.util';
 import { parseAndFormatGmailMessage } from 'src/modules/messaging/message-import-manager/drivers/gmail/utils/parse-and-format-gmail-message.util';
+import { type ImportedMessageAttachment } from 'src/modules/messaging/message-import-manager/types/message.type';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message.type';
+import { MAX_IMPORTED_EMAIL_ATTACHMENT_BYTES } from 'src/modules/messaging/message-import-manager/utils/is-importable-email-attachment.util';
 
 const GMAIL_BATCH_REQUEST_MAX_SIZE = 50;
 
 @Injectable()
 export class GmailGetMessagesService {
+  private readonly logger = new Logger(GmailGetMessagesService.name);
+
   constructor(
     private readonly googleOAuth2ClientProvider: GoogleOAuth2ClientProvider,
     private readonly gmailMessagesImportErrorHandler: GmailMessagesImportErrorHandler,
@@ -173,25 +177,86 @@ export class GmailGetMessagesService {
       ),
     );
 
-    return results
-      .map(({ messageId, data, error }) => {
+    const messages = await Promise.all(
+      results.map(async ({ messageId, data, error }) => {
         if (error) {
           this.gmailMessagesImportErrorHandler.handleError(error, messageId);
 
           return undefined;
         }
 
-        return parseAndFormatGmailMessage(
+        const message = parseAndFormatGmailMessage(
           data as gmailV1.Schema$Message,
           connectedAccount,
         );
-      })
-      .filter(isDefined)
-      .filter(
-        (message) =>
-          !(message.labelIds ?? []).some((labelId) =>
-            MESSAGING_GMAIL_EXCLUDED_SYSTEM_LABELS.includes(labelId),
-          ),
-      );
+
+        if (!isDefined(message)) {
+          return undefined;
+        }
+
+        return this.downloadAttachmentContents(gmailClient, message);
+      }),
+    );
+
+    return messages.filter(isDefined).filter(
+      (message) =>
+        !(message.labelIds ?? []).some((labelId) =>
+          MESSAGING_GMAIL_EXCLUDED_SYSTEM_LABELS.includes(labelId),
+        ),
+    );
+  }
+
+  private async downloadAttachmentContents(
+    gmailClient: gmailV1.Gmail,
+    message: MessageWithParticipants,
+  ): Promise<MessageWithParticipants> {
+    const attachments: ImportedMessageAttachment[] = [];
+
+    for (const attachment of message.attachments) {
+      if (attachment.filename.toLowerCase().endsWith('.ics')) {
+        attachments.push({ filename: attachment.filename });
+        continue;
+      }
+
+      if (!isNonEmptyString(attachment.id)) {
+        continue;
+      }
+
+      try {
+        const response = await gmailClient.users.messages.attachments.get({
+          userId: 'me',
+          messageId: message.externalId,
+          id: attachment.id,
+        });
+        const encodedContent = response.data.data;
+
+        if (!isNonEmptyString(encodedContent)) {
+          continue;
+        }
+
+        const content = Buffer.from(encodedContent, 'base64url');
+
+        if (
+          content.length === 0 ||
+          content.length > MAX_IMPORTED_EMAIL_ATTACHMENT_BYTES
+        ) {
+          continue;
+        }
+
+        attachments.push({
+          ...attachment,
+          content,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Skipped Gmail attachment ${attachment.filename} on message ${message.externalId}: ${error}`,
+        );
+      }
+    }
+
+    return {
+      ...message,
+      attachments,
+    };
   }
 }

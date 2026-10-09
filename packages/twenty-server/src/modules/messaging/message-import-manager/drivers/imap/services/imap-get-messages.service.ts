@@ -13,6 +13,7 @@ import { resolveReceivedAt } from 'src/modules/messaging/message-import-manager/
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message.type';
 import { extractAddressesFromParsedEmail } from 'src/modules/messaging/message-import-manager/utils/extract-addresses-from-parsed-email.util';
 import { extractMessageTextWithoutQuotedHistory } from 'src/modules/messaging/message-import-manager/utils/extract-message-text-without-quoted-history.util';
+import { MAX_IMPORTED_EMAIL_ATTACHMENT_BYTES } from 'src/modules/messaging/message-import-manager/utils/is-importable-email-attachment.util';
 import { extractParticipantsFromParsedEmail } from 'src/modules/messaging/message-import-manager/utils/extract-participants-from-parsed-email.util';
 import { extractThreadIdFromParsedEmail } from 'src/modules/messaging/message-import-manager/utils/extract-thread-id-from-parsed-email.util';
 import { sanitizeString } from 'src/modules/messaging/message-import-manager/utils/sanitize-string.util';
@@ -184,9 +185,36 @@ export class ImapGetMessagesService {
       text,
       receivedAt: resolveReceivedAt({ headerDate: parsed.date, internalDate }),
       direction: computeMessageDirection(senderAddress, connectedAccount),
-      attachments: (parsed.attachments || []).map((attachment) => ({
-        filename: attachment.filename || 'unnamed-attachment',
-      })),
+      attachments: (parsed.attachments || []).flatMap((attachment) => {
+        const filename = attachment.filename ?? '';
+
+        if (attachment.disposition === 'inline' || filename.length === 0) {
+          return [];
+        }
+
+        if (filename.toLowerCase().endsWith('.ics')) {
+          return [{ filename }];
+        }
+
+        const content = Buffer.isBuffer(attachment.content)
+          ? attachment.content
+          : Buffer.from(attachment.content);
+
+        if (
+          content.length === 0 ||
+          content.length > MAX_IMPORTED_EMAIL_ATTACHMENT_BYTES
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            filename,
+            content,
+            contentType: attachment.mimeType,
+          },
+        ];
+      }),
       participants: extractParticipantsFromParsedEmail(parsed),
       messageFolderExternalIds: [folderExternalId],
       isDraft: flags?.has('\\Draft') ?? false,

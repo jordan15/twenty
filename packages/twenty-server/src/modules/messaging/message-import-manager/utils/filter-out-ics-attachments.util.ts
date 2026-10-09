@@ -4,12 +4,15 @@ export const filterOutIcsAttachments = (
   messages: MessageWithParticipants[],
 ) => {
   return messages.filter((message) => {
-    if (!message.attachments) {
+    const attachments = message.attachments ?? [];
+
+    if (attachments.length === 0) {
       return true;
     }
 
-    return message.attachments.every(
-      (attachment) => !attachment.filename.endsWith('.ics'),
+    // A calendar invite has only .ics files. A mail that also carries a real file is kept.
+    return attachments.some(
+      (attachment) => !attachment.filename.toLowerCase().endsWith('.ics'),
     );
   });
 };

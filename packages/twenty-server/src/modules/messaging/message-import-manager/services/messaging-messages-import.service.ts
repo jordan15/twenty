@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 
 import { InjectCacheStorage } from 'src/engine/core-modules/cache-storage/decorators/cache-storage.decorator';
 import { CacheStorageService } from 'src/engine/core-modules/cache-storage/services/cache-storage.service';
@@ -21,7 +22,9 @@ import {
   MessageImportDriverException,
   MessageImportDriverExceptionCode,
 } from 'src/modules/messaging/message-import-manager/drivers/exceptions/message-import-driver.exception';
+import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
 import { MessagingGetMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-get-messages.service';
+import { MessagingImportMessageAttachmentsService } from 'src/modules/messaging/message-import-manager/services/messaging-import-message-attachments.service';
 import {
   MessageImportExceptionHandlerService,
   MessageImportSyncStep,
@@ -41,6 +44,7 @@ export class MessagingMessagesImportService {
     private readonly cacheStorage: CacheStorageService,
     private readonly messageChannelSyncStatusService: MessageChannelSyncStatusService,
     private readonly saveMessagesAndEnqueueContactCreationService: MessagingSaveMessagesAndEnqueueContactCreationService,
+    private readonly importMessageAttachmentsService: MessagingImportMessageAttachmentsService,
     private readonly messagingMonitoringService: MessagingMonitoringService,
     private readonly blocklistRepository: BlocklistRepository,
     private readonly emailAliasManagerService: EmailAliasManagerService,
@@ -260,6 +264,109 @@ export class MessagingMessagesImportService {
       authContext,
       { lite: true },
     );
+  }
+
+  // Already stored mails are skipped by incremental sync. Each run copies
+  // attachments for the next batch, newest first, until the channel is caught up.
+  async importMissingEmailAttachments(
+    messageChannel: MessageChannelEntity,
+    connectedAccount: ConnectedAccountEntity,
+    workspaceId: string,
+  ): Promise<void> {
+    const batchSize = 40;
+    const cursorKey = `email-attachment-backfill:${workspaceId}:${messageChannel.id}`;
+
+    try {
+      const authContext = buildSystemAuthContext(workspaceId);
+
+      await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+        const cursor = await this.cacheStorage.get<{
+          createdAt: string;
+          id: string;
+        }>(cursorKey);
+        const associationRepository =
+          this.workspaceOrmManager.getRepository<MessageChannelMessageAssociationWorkspaceEntity>(
+            'messageChannelMessageAssociation',
+            { shouldBypassPermissionChecks: true },
+          );
+        const cursorDate = isDefined(cursor)
+          ? new Date(cursor.createdAt)
+          : undefined;
+        const associations = await associationRepository.find({
+          where: isDefined(cursorDate)
+            ? [
+                {
+                  messageChannelId: messageChannel.id,
+                  createdAt: LessThan(cursorDate),
+                },
+                {
+                  messageChannelId: messageChannel.id,
+                  createdAt: cursorDate,
+                  id: LessThan(cursor.id),
+                },
+              ]
+            : { messageChannelId: messageChannel.id },
+          select: {
+            id: true,
+            createdAt: true,
+            messageId: true,
+            messageExternalId: true,
+          },
+          order: { createdAt: 'DESC', id: 'DESC' },
+          take: batchSize,
+        });
+
+        if (associations.length === 0) {
+          return;
+        }
+
+        const messageIdByExternalId = new Map(
+          associations.flatMap((association) =>
+            isNonEmptyString(association.messageExternalId)
+              ? ([[association.messageExternalId, association.messageId]] as const)
+              : [],
+          ),
+        );
+        const externalIds = [...messageIdByExternalId.keys()];
+        const messages =
+          externalIds.length === 0
+            ? []
+            : await this.messagingGetMessagesService.getMessages(
+                externalIds,
+                connectedAccount,
+                messageChannel,
+              );
+
+        if (externalIds.length > 0 && messages.length === 0) {
+          this.logger.warn(
+            `WorkspaceId: ${workspaceId}, MessageChannelId: ${messageChannel.id} - Attachment backfill downloaded no messages, retrying this batch next sync`,
+          );
+
+          return;
+        }
+
+        await this.importMessageAttachmentsService.importAttachments({
+          messages,
+          messageIdByExternalId,
+          workspaceId,
+        });
+
+        const oldestInBatch = associations[associations.length - 1];
+
+        await this.cacheStorage.set(cursorKey, {
+          createdAt: new Date(oldestInBatch.createdAt).toISOString(),
+          id: oldestInBatch.id,
+        });
+
+        this.logger.log(
+          `WorkspaceId: ${workspaceId}, MessageChannelId: ${messageChannel.id} - Imported attachments for ${messages.length} already stored messages`,
+        );
+      }, authContext);
+    } catch (error) {
+      this.logger.warn(
+        `WorkspaceId: ${workspaceId}, MessageChannelId: ${messageChannel.id} - Failed to backfill email attachments: ${error}`,
+      );
+    }
   }
 
   private async trackMessageImportCompleted(
