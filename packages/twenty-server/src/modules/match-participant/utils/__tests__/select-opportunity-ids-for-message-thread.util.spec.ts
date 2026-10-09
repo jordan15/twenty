@@ -4,24 +4,22 @@ const opportunityA = { id: 'opportunity-a', offerNumber: 'OFF-12' };
 const opportunityB = { id: 'opportunity-b', offerNumber: 'OFF-99' };
 
 describe('selectOpportunityIdsForMessageThread', () => {
-  it('keeps the only opportunity when the subject does not contain its offer number', () => {
+  it('links nothing when the only opportunity is not cited in the subject', () => {
     expect(
       selectOpportunityIdsForMessageThread({
         opportunities: [opportunityA],
         subjects: ['Point hebdo'],
-        matchOfferNumberInSubject: true,
       }),
-    ).toEqual(['opportunity-a']);
+    ).toEqual([]);
   });
 
-  it('keeps every opportunity when offer-number matching is off', () => {
+  it('links the only opportunity when its offer number is in the subject', () => {
     expect(
       selectOpportunityIdsForMessageThread({
-        opportunities: [opportunityA, opportunityB],
-        subjects: ['Point hebdo'],
-        matchOfferNumberInSubject: false,
+        opportunities: [opportunityA],
+        subjects: ['Devis OFF-12'],
       }),
-    ).toEqual(['opportunity-a', 'opportunity-b']);
+    ).toEqual(['opportunity-a']);
   });
 
   it('keeps the opportunity whose offer number is in a reply subject', () => {
@@ -29,7 +27,6 @@ describe('selectOpportunityIdsForMessageThread', () => {
       selectOpportunityIdsForMessageThread({
         opportunities: [opportunityA, opportunityB],
         subjects: ['Re: Tr: off-12 — proposition'],
-        matchOfferNumberInSubject: true,
       }),
     ).toEqual(['opportunity-a']);
   });
@@ -39,7 +36,6 @@ describe('selectOpportunityIdsForMessageThread', () => {
       selectOpportunityIdsForMessageThread({
         opportunities: [opportunityA, opportunityB],
         subjects: ['Point hebdo'],
-        matchOfferNumberInSubject: true,
       }),
     ).toEqual([]);
   });
@@ -52,7 +48,6 @@ describe('selectOpportunityIdsForMessageThread', () => {
           { id: 'opportunity-c', offerNumber: 'OFF-123' },
         ],
         subjects: ['Devis OFF-123'],
-        matchOfferNumberInSubject: true,
       }),
     ).toEqual(['opportunity-c']);
   });
@@ -62,7 +57,6 @@ describe('selectOpportunityIdsForMessageThread', () => {
       selectOpportunityIdsForMessageThread({
         opportunities: [opportunityA, opportunityB],
         subjects: ['OFF-12 et aussi OFF-99'],
-        matchOfferNumberInSubject: true,
       }),
     ).toEqual(['opportunity-a', 'opportunity-b']);
   });
@@ -75,7 +69,6 @@ describe('selectOpportunityIdsForMessageThread', () => {
           { id: 'opportunity-d', offerNumber: '   ' },
         ],
         subjects: ['Sans numero'],
-        matchOfferNumberInSubject: true,
       }),
     ).toEqual([]);
   });
