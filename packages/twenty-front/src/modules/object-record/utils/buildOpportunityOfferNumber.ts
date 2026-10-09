@@ -122,74 +122,6 @@ export const getOpportunityOfferNumberYearBounds = (
   lte: endOfISOWeekYear(date).toISOString(),
 });
 
-const readCreatedAtTime = (createdAt: unknown): number | undefined => {
-  if (createdAt instanceof Date) {
-    const time = createdAt.getTime();
-
-    return Number.isNaN(time) ? undefined : time;
-  }
-
-  if (!isString(createdAt) || createdAt.trim().length === 0) {
-    return undefined;
-  }
-
-  const time = new Date(createdAt).getTime();
-
-  return Number.isNaN(time) ? undefined : time;
-};
-
-// totalCount on an unfiltered findMany is every opportunity ever created.
-export const isOpportunityCreatedInIsoWeekYear = ({
-  createdAt,
-  date,
-}: {
-  createdAt: unknown;
-  date: Date;
-}): boolean => {
-  const createdAtTime = readCreatedAtTime(createdAt);
-
-  if (!isDefined(createdAtTime)) {
-    return false;
-  }
-
-  const rangeStart = startOfISOWeekYear(date).getTime();
-  const rangeEnd = endOfISOWeekYear(date).getTime();
-
-  return createdAtTime >= rangeStart && createdAtTime <= rangeEnd;
-};
-
-export const collectOpportunityOfferNumberSequenceInputs = ({
-  opportunities,
-  date,
-  offerNumberFieldName,
-}: {
-  opportunities: readonly {
-    createdAt?: unknown;
-    [fieldName: string]: unknown;
-  }[];
-  date: Date;
-  offerNumberFieldName: string;
-}): {
-  yearlyOpportunityCount: number;
-  existingOfferNumbers: string[];
-} => {
-  const yearlyOpportunityCount = opportunities.filter((opportunity) =>
-    isOpportunityCreatedInIsoWeekYear({
-      createdAt: opportunity.createdAt,
-      date,
-    }),
-  ).length;
-
-  return {
-    yearlyOpportunityCount,
-    existingOfferNumbers: opportunities.flatMap((opportunity) => {
-      const offerNumber = opportunity[offerNumberFieldName];
-
-      return isString(offerNumber) ? [offerNumber] : [];
-    }),
-  };
-};
-
 const OFFER_NUMBER_SEQUENCE_PATTERN = /^(\d{2})\d{2}-[^-]+-(\d+)$/;
 
 export const readOpportunityOfferNumberSequence = ({
@@ -245,6 +177,39 @@ export const computeNextOpportunityOfferSequence = ({
 // ISO week-year, so YY stays aligned with WW across the new year.
 const getOpportunityOfferNumberYearPrefix = (date: Date): string =>
   String(getISOWeekYear(date) % 100).padStart(2, '0');
+
+// The year is the offer-number prefix. createdAt is the import day for every
+// historical opportunity, so it cannot separate 2025 from 2026.
+export const collectOpportunityOfferNumberSequenceInputs = ({
+  opportunities,
+  date,
+  offerNumberFieldName,
+}: {
+  opportunities: readonly {
+    [fieldName: string]: unknown;
+  }[];
+  date: Date;
+  offerNumberFieldName: string;
+}): {
+  yearlyOpportunityCount: number;
+  existingOfferNumbers: string[];
+} => {
+  const yearPrefix = getOpportunityOfferNumberYearPrefix(date);
+  const existingOfferNumbers = opportunities.flatMap((opportunity) => {
+    const offerNumber = opportunity[offerNumberFieldName];
+
+    return isString(offerNumber) ? [offerNumber] : [];
+  });
+
+  return {
+    yearlyOpportunityCount: existingOfferNumbers.filter(
+      (offerNumber) =>
+        readOpportunityOfferNumberSequence({ offerNumber, yearPrefix }) !==
+        undefined,
+    ).length,
+    existingOfferNumbers,
+  };
+};
 
 export const buildOpportunityOfferNumber = ({
   date,

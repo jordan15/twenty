@@ -1,5 +1,3 @@
-import { endOfISOWeekYear, startOfISOWeekYear } from 'date-fns';
-
 import {
   computeOpportunityOfferNumberSequence,
   computeOpportunityOfferNumberSequenceFromOpportunities,
@@ -48,26 +46,23 @@ describe('computeOpportunityOfferNumberSequence', () => {
 });
 
 describe('computeOpportunityOfferNumberSequenceFromOpportunities', () => {
-  const now = new Date(2026, 9, 9);
-  const rangeStart = startOfISOWeekYear(now);
-  const rangeEnd = endOfISOWeekYear(now);
-  const createdIn2025 = new Date(2025, 5, 1);
-  const createdIn2026 = new Date(2026, 9, 1);
+  // An import writes the same createdAt on 2025 and 2026 offers.
+  const importedAt = new Date(2026, 9, 9);
 
   const buildOpportunities = (
     offerNumbersThisYear: readonly string[],
   ): { createdAt: Date; nOffre: string }[] => [
     ...Array.from({ length: 200 }, (_, index) => ({
-      createdAt: createdIn2025,
+      createdAt: importedAt,
       nOffre: `2510-AB-${100 + index}`,
     })),
     ...offerNumbersThisYear.map((offerNumber) => ({
-      createdAt: createdIn2026,
+      createdAt: importedAt,
       nOffre: offerNumber,
     })),
   ];
 
-  it('does not turn an all-time count of 211 into a suffix of 311', () => {
+  it('does not turn 211 imported offers into a suffix of 311', () => {
     const opportunities = buildOpportunities([
       '2641-YC-272',
       '2641-YC-270',
@@ -88,8 +83,6 @@ describe('computeOpportunityOfferNumberSequenceFromOpportunities', () => {
         opportunities,
         offerNumberFieldName: 'nOffre',
         yearPrefix: '26',
-        rangeStart,
-        rangeEnd,
       }),
     ).toBe(273);
   });
@@ -104,30 +97,24 @@ describe('computeOpportunityOfferNumberSequenceFromOpportunities', () => {
         ]),
         offerNumberFieldName: 'nOffre',
         yearPrefix: '26',
-        rangeStart,
-        rangeEnd,
       }),
     ).toBe(312);
   });
 
-  it('ignores a 2025 prefix and still respects a 26 prefix on an older row', () => {
+  it('ignores a 2025 prefix and still respects a 26 prefix', () => {
     expect(
       computeOpportunityOfferNumberSequenceFromOpportunities({
-        opportunities: [{ createdAt: createdIn2025, nOffre: '2541-AB-900' }],
+        opportunities: [{ createdAt: importedAt, nOffre: '2541-AB-900' }],
         offerNumberFieldName: 'nOffre',
         yearPrefix: '26',
-        rangeStart,
-        rangeEnd,
       }),
     ).toBe(100);
 
     expect(
       computeOpportunityOfferNumberSequenceFromOpportunities({
-        opportunities: [{ createdAt: createdIn2025, nOffre: '2641-AO-311' }],
+        opportunities: [{ createdAt: importedAt, nOffre: '2641-AO-311' }],
         offerNumberFieldName: 'nOffre',
         yearPrefix: '26',
-        rangeStart,
-        rangeEnd,
       }),
     ).toBe(312);
   });

@@ -10,7 +10,6 @@ import {
   buildWorkspaceMemberInitials,
   collectOpportunityOfferNumberSequenceInputs,
   findOpportunityOfferNumberField,
-  getOpportunityOfferNumberYearBounds,
   resolveOpportunityOfferNumber,
 } from '@/object-record/utils/buildOpportunityOfferNumber';
 import { isNonEmptyString, isString } from '@sniptt/guards';
@@ -47,7 +46,7 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
   const { findManyRecordsQuery } = useFindManyRecordsQuery({
     objectNameSingular: objectMetadataItem.nameSingular,
     recordGqlFields: isDefined(offerNumberField)
-      ? { id: true, createdAt: true, [offerNumberField.name]: true }
+      ? { id: true, [offerNumberField.name]: true }
       : undefined,
   });
 
@@ -109,9 +108,7 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
         // reloaded its schema. Fall back to the records this member can read.
       }
 
-      const { gte, lte } = getOpportunityOfferNumberYearBounds(now);
       const loadedOpportunities: {
-        createdAt?: unknown;
         [fieldName: string]: unknown;
       }[] = [];
 
@@ -124,11 +121,6 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
             await apolloCoreClient.query<RecordGqlOperationFindManyResult>({
               query: findManyRecordsQuery,
               variables: {
-                // A field filter keeps only the first comparator, so the year
-                // bounds have to be separate conditions.
-                filter: {
-                  and: [{ createdAt: { gte } }, { createdAt: { lte } }],
-                },
                 orderBy: [{ createdAt: 'DescNullsLast' }],
                 limit: QUERY_MAX_RECORDS,
                 lastCursor,
@@ -140,7 +132,6 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
 
           loadedOpportunities.push(
             ...(connection?.edges ?? []).map((edge) => ({
-              createdAt: edge.node?.createdAt,
               [offerNumberField.name]: edge.node?.[offerNumberField.name],
             })),
           );
@@ -159,8 +150,6 @@ export const useBuildOpportunityOfferNumberRecordInput = ({
         // Still propose YYWW-initials-100 when the yearly count cannot be loaded.
       }
 
-      // totalCount follows the connection filter. When that filter drops a
-      // bound it is the all-time total, so the chrono is counted from createdAt.
       const { yearlyOpportunityCount, existingOfferNumbers } =
         collectOpportunityOfferNumberSequenceInputs({
           opportunities: loadedOpportunities,

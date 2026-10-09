@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { endOfISOWeekYear, getISOWeekYear, startOfISOWeekYear } from 'date-fns';
-import { Between } from 'typeorm';
+import { getISOWeekYear } from 'date-fns';
 import { isDefined } from 'twenty-shared/utils';
 
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
@@ -42,30 +41,25 @@ export class OpportunityOfferNumberSequenceService {
         OFFER_NUMBER_FIELD_NAME_PATTERN.test(offerNumberFieldName)
           ? offerNumberFieldName
           : undefined;
-      const now = new Date();
-      const rangeStart = startOfISOWeekYear(now);
-      const rangeEnd = endOfISOWeekYear(now);
-      const yearPrefix = String(getISOWeekYear(now) % 100).padStart(2, '0');
+      const yearPrefix = String(getISOWeekYear(new Date()) % 100).padStart(
+        2,
+        '0',
+      );
       const queryBuilder = repository.createQueryBuilder('opportunity');
 
       queryBuilder.setFindOptions({
         select: {
           id: true,
-          createdAt: true,
           ...(isDefined(selectableFieldName)
             ? { [selectableFieldName]: true }
             : {}),
         },
       });
+      // Imported opportunities share the import day's createdAt, so the year
+      // is the offer-number prefix, not the row timestamp.
       queryBuilder.withDeleted();
-      // Bound the read to this ISO week-year. The helper counts createdAt
-      // again so rows outside that range cannot advance the chrono.
-      queryBuilder.andWhere({
-        createdAt: Between(rangeStart, rangeEnd),
-      });
 
       const opportunities = await queryBuilder.getMany<{
-        createdAt?: unknown;
         [fieldName: string]: unknown;
       }>();
 
@@ -73,8 +67,6 @@ export class OpportunityOfferNumberSequenceService {
         opportunities,
         offerNumberFieldName: selectableFieldName,
         yearPrefix,
-        rangeStart,
-        rangeEnd,
       });
     });
   }
