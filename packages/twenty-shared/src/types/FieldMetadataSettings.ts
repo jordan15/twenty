@@ -39,6 +39,9 @@ type FieldMetadataCurrencySettings = {
 
 type FieldMetadataTextSettings = {
   displayedMaxRows?: number;
+  // When enabled, the text value is treated as a filesystem folder path:
+  // the field renders copy/open affordances and the input accepts folder drops.
+  displayAsFolderPath?: boolean;
 };
 
 type FieldMetadataDateSettings = {
